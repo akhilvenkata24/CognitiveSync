@@ -691,15 +691,15 @@ export default function App() {
             style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}
             className={attentionLevel === 3 ? 'level3-bg-blur' : ''}
           >
-            <TelemetryPanel 
-              telemetry={telemetry}
-              industry={industry}
-              attentionLevel={attentionLevel}
-            />
             <AlertPanel 
               alerts={alerts}
               operatorState={telemetry.state}
               onAcknowledgeAlert={handleAcknowledgeAlert}
+              industry={industry}
+              attentionLevel={attentionLevel}
+            />
+            <TelemetryPanel 
+              telemetry={telemetry}
               industry={industry}
               attentionLevel={attentionLevel}
             />
