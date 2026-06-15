@@ -154,7 +154,6 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     const eyeR = landmarks[263];  // Left side of image, right side of face
     const mouthL = landmarks[61];
     const mouthR = landmarks[291];
-    const chin = landmarks[152];
 
     // Estimate Yaw (Horizontal look angle)
     const distNoseToEyeL = Math.hypot(nose.x - eyeL.x, nose.y - eyeL.y);
@@ -175,13 +174,11 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     // ==========================================
     // 2. Math Computations for Eye Aspect Ratio (EAR)
     // ==========================================
-    // Right Eye vertical distances: 159-145, 158-144. Width: 33-133
     const earRight = (
       Math.hypot(landmarks[159].x - landmarks[145].x, landmarks[159].y - landmarks[145].y) +
       Math.hypot(landmarks[158].x - landmarks[144].x, landmarks[158].y - landmarks[144].y)
     ) / (2.0 * Math.hypot(landmarks[33].x - landmarks[133].x, landmarks[33].y - landmarks[133].y));
 
-    // Left Eye vertical distances: 386-374, 385-373. Width: 362-263
     const earLeft = (
       Math.hypot(landmarks[386].x - landmarks[374].x, landmarks[386].y - landmarks[374].y) +
       Math.hypot(landmarks[385].x - landmarks[373].x, landmarks[385].y - landmarks[373].y)
@@ -193,11 +190,9 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     // ==========================================
     // 3. Eye Gaze Deviation
     // ==========================================
-    // Iris landmarks: Left 468 (Center), Right 473 (Center)
     const irisL = landmarks[468];
     const irisR = landmarks[473];
 
-    // Compute eyes midpoints
     const eyeLOuter = landmarks[362];
     const eyeLInner = landmarks[263];
     const eyeROuter = landmarks[33];
@@ -206,7 +201,6 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     const leftCenter = { x: (eyeLOuter.x + eyeLInner.x) / 2, y: (eyeLOuter.y + eyeLInner.y) / 2 };
     const rightCenter = { x: (eyeROuter.x + eyeRInner.x) / 2, y: (eyeROuter.y + eyeRInner.y) / 2 };
 
-    // Shift offsets (relative gaze)
     const gazeXL = (irisL.x - leftCenter.x) * 450;
     const gazeYL = (irisL.y - leftCenter.y) * 450;
     const gazeXR = (irisR.x - rightCenter.x) * 450;
@@ -218,11 +212,9 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     // ==========================================
     // 4. State Decision & Attention Score Math
     // ==========================================
-    // Calculate penalties
     const yawPenalty = Math.min(35, Math.abs(yaw) * 1.5);
     const pitchPenalty = Math.min(30, Math.abs(pitch) * 1.3);
     
-    // Gaze offset from center penalty (normal variance is within -12 to +12)
     const gazeDev = Math.hypot(gazeX, gazeY);
     const gazePenalty = gazeDev > 10 ? Math.min(30, (gazeDev - 10) * 1.8) : 0;
 
@@ -237,14 +229,13 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
         const closedDuration = (Date.now() - closedEyesStartRef.current) / 1000;
         if (closedDuration > 1.3) {
           fatigueState = true;
-          score = 5; // Force drop attention score
+          score = 5;
         }
       }
     } else {
       closedEyesStartRef.current = null;
     }
 
-    // Classify operator cognitive state based on score
     let state = 'focused';
     if (fatigueState) {
       state = 'fatigued';
@@ -254,7 +245,6 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
       state = 'normal';
     }
 
-    // Call parent updater
     onTelemetryUpdate({
       detected: true,
       attentionScore: Math.round(score),
@@ -269,77 +259,99 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     });
 
     // ==========================================
-    // 5. Canvas Drawing (Futuristic Cyber Wireframe)
+    // 5. Canvas Drawing (Futuristic Biometric Targeting Visor)
     // ==========================================
-    ctx.strokeStyle = activeState === 'distracted' ? '#ff1744' : (activeState === 'fatigued' ? '#d500f9' : '#00e5ff');
-    ctx.lineWidth = 1;
+    const primaryColor = activeState === 'distracted' ? 'var(--color-distracted)' : (activeState === 'fatigued' ? 'var(--color-fatigued)' : 'var(--color-focused)');
+    ctx.strokeStyle = primaryColor;
+    ctx.lineWidth = 1.5;
     ctx.shadowBlur = 0;
 
-    // Draw Face Mesh lines (Subset for performance & aesthetics)
-    // Connect face outline landmarks
-    const faceOutlineIndices = [
-      10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 
-      400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 
-      54, 103, 67, 109
-    ];
-    
+    // Draw high-tech HUD crosshairs
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(landmarks[faceOutlineIndices[0]].x * width, landmarks[faceOutlineIndices[0]].y * height);
-    for (let i = 1; i < faceOutlineIndices.length; i++) {
-      ctx.lineTo(landmarks[faceOutlineIndices[i]].x * width, landmarks[faceOutlineIndices[i]].y * height);
-    }
-    ctx.closePath();
+    ctx.arc(width / 2, height / 2, Math.min(width, height) / 2 - 10, 0, 2 * Math.PI);
+    ctx.moveTo(10, height / 2);
+    ctx.lineTo(width - 10, height / 2);
+    ctx.moveTo(width / 2, 10);
+    ctx.lineTo(width / 2, height - 10);
     ctx.stroke();
 
-    // Draw Eyes Contours & Iris Indicators
-    const drawContour = (indices) => {
-      ctx.beginPath();
-      ctx.moveTo(landmarks[indices[0]].x * width, landmarks[indices[0]].y * height);
-      for (let i = 1; i < indices.length; i++) {
-        ctx.lineTo(landmarks[indices[i]].x * width, landmarks[indices[i]].y * height);
-      }
-      ctx.closePath();
-      ctx.stroke();
-    };
-
-    const rightEyeIndices = [33, 160, 158, 133, 153, 144];
-    const leftEyeIndices = [362, 385, 387, 263, 373, 380];
-    drawContour(rightEyeIndices);
-    drawContour(leftEyeIndices);
-
-    // Draw Pupils (Iris)
-    ctx.fillStyle = '#ff1744';
-    ctx.shadowColor = '#ff1744';
-    ctx.shadowBlur = 4;
+    // Draw horizontal scanning sweep line
+    const sweepY = (height / 2) + Math.sin(Date.now() / 250) * (height / 2 - 15);
+    ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(irisL.x * width, irisL.y * height, 2.5, 0, 2 * Math.PI);
-    ctx.arc(irisR.x * width, irisR.y * height, 2.5, 0, 2 * Math.PI);
-    ctx.fill();
+    ctx.moveTo(15, sweepY);
+    ctx.lineTo(width - 15, sweepY);
+    ctx.stroke();
 
-    // Reset shadow
+    // Draw a target box bracket around the nose (representing facial center)
+    const nx = nose.x * width;
+    const ny = nose.y * height;
+    const boxSize = 100;
+    
+    ctx.strokeStyle = primaryColor;
+    ctx.lineWidth = 1.8;
+    const bracketSize = 16;
+    
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(nx - boxSize/2, ny - boxSize/2 + bracketSize);
+    ctx.lineTo(nx - boxSize/2, ny - boxSize/2);
+    ctx.lineTo(nx - boxSize/2 + bracketSize, ny - boxSize/2);
+    ctx.stroke();
+    
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(nx + boxSize/2 - bracketSize, ny - boxSize/2);
+    ctx.lineTo(nx + boxSize/2, ny - boxSize/2);
+    ctx.lineTo(nx + boxSize/2, ny - boxSize/2 + bracketSize);
+    ctx.stroke();
+    
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(nx - boxSize/2, ny + boxSize/2 - bracketSize);
+    ctx.lineTo(nx - boxSize/2, ny + boxSize/2);
+    ctx.lineTo(nx - boxSize/2 + bracketSize, ny + boxSize/2);
+    ctx.stroke();
+    
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(nx + boxSize/2 - bracketSize, ny + boxSize/2);
+    ctx.lineTo(nx + boxSize/2, ny + boxSize/2);
+    ctx.lineTo(nx + boxSize/2, ny + boxSize/2 - bracketSize);
+    ctx.stroke();
+
+    // Draw Pupil Lock Indicators
+    ctx.fillStyle = 'var(--hud-accent)';
+    ctx.shadowColor = 'var(--hud-accent)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(irisL.x * width, irisL.y * height, 3, 0, 2 * Math.PI);
+    ctx.arc(irisR.x * width, irisR.y * height, 3, 0, 2 * Math.PI);
+    ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Draw Gaze Vector Projection Line
-    const centerEyeX = (irisL.x + irisR.x) / 2 * width;
-    const centerEyeY = (irisL.y + irisR.y) / 2 * height;
+    // Draw Gaze Vector Projection Line (Focal Line)
+    const centerEyeX = ((irisL.x + irisR.x) / 2) * width;
+    const centerEyeY = ((irisL.y + irisR.y) / 2) * height;
     ctx.strokeStyle = '#00e676';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.2;
     ctx.beginPath();
     ctx.moveTo(centerEyeX, centerEyeY);
-    // Project vector based on gaze deviation
-    ctx.lineTo(centerEyeX + gazeX * 5, centerEyeY + gazeY * 5);
+    ctx.lineTo(centerEyeX + gazeX * 5.5, centerEyeY + gazeY * 5.5);
     ctx.stroke();
 
-    // Draw nose & mouth crosshairs (sleek military/HUD look)
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(nose.x * width, nose.y * height, 8, 0, 2 * Math.PI);
-    ctx.moveTo(nose.x * width - 12, nose.y * height);
-    ctx.lineTo(nose.x * width + 12, nose.y * height);
-    ctx.moveTo(nose.x * width, nose.y * height - 12);
-    ctx.lineTo(nose.x * width, nose.y * height + 12);
-    ctx.stroke();
+    // Draw HUD Digital Overlays on target lock
+    ctx.fillStyle = primaryColor;
+    ctx.font = 'bold 9px Share Tech Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText("SYS: BIOMETRIC LOCK", nx - boxSize/2, ny - boxSize/2 - 12);
+    ctx.fillText(`EAR: ${ear.toFixed(3)}`, nx - boxSize/2, ny + boxSize/2 + 15);
+    ctx.textAlign = 'right';
+    ctx.fillText(`STATE: ${activeState.toUpperCase()}`, nx + boxSize/2, ny - boxSize/2 - 12);
+    ctx.fillText(`GAZE DEV: ${gazeDev.toFixed(1)}`, nx + boxSize/2, ny + boxSize/2 + 15);
   };
 
   return (
@@ -348,90 +360,95 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
         <CameraIcon size={16} /> Operator Tracking HUD
       </div>
       
-      <div className="webcam-wrapper">
-        <video 
-          ref={videoRef} 
-          className="webcam-video" 
-          muted 
-          playsInline
-          style={{ display: trackingActive ? 'block' : 'none' }}
-        />
-        <canvas 
-          ref={canvasRef} 
-          className="webcam-canvas" 
-          style={{ display: trackingActive ? 'block' : 'none' }}
-        />
+      {/* Centered Circular HUD Scanner Wrapper */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0.5rem 0' }}>
+        <div style={{ 
+          position: 'relative', 
+          width: '180px', 
+          height: '180px', 
+          borderRadius: '50%', 
+          overflow: 'hidden', 
+          border: '2px solid var(--hud-accent)', 
+          boxShadow: 'var(--hud-accent-glow)',
+          background: '#010206'
+        }}>
+          <video 
+            ref={videoRef} 
+            className="webcam-video" 
+            muted 
+            playsInline
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', transform: 'scaleX(-1)' }}
+          />
+          <canvas 
+            ref={canvasRef} 
+            className="webcam-canvas" 
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, borderRadius: '50%', transform: 'scaleX(-1)' }}
+          />
 
-        {!trackingActive && !errorMsg && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(5, 7, 15, 0.9)', gap: '1rem', padding: '1rem', textAlign: 'center'
-          }}>
+          {!trackingActive && !errorMsg && (
             <div style={{
-              width: '60px', height: '60px', borderRadius: '50%', background: 'var(--hud-bg-glow)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hud-accent)',
-              border: '1px solid var(--hud-accent)', boxShadow: 'var(--hud-accent-glow)'
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(5, 7, 15, 0.9)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center'
             }}>
-              <CameraIcon size={24} />
+              <div style={{
+                width: '40px', height: '40px', borderRadius: '50%', background: 'var(--hud-bg-glow)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hud-accent)',
+                border: '1px solid var(--hud-accent)'
+              }}>
+                <CameraIcon size={18} />
+              </div>
+              <button 
+                className="ack-button" 
+                onClick={startTracking}
+                style={{ background: 'var(--hud-accent)', color: '#000', fontSize: '0.65rem', padding: '0.3rem 0.8rem', boxShadow: 'none' }}
+              >
+                Start Stream
+              </button>
             </div>
-            <div>
-              <h3 style={{ fontFamily: 'var(--font-hud)', fontSize: '0.9rem', marginBottom: '0.25rem' }}>Camera Stream Off</h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Initialize computer vision tracking stream</p>
-            </div>
-            <button 
-              className="ack-button" 
-              onClick={startTracking}
-              style={{ background: 'var(--hud-accent)', color: '#000', fontSize: '0.75rem', padding: '0.5rem 1.5rem', boxShadow: 'none' }}
-            >
-              Start Sensor Stream
-            </button>
-          </div>
-        )}
+          )}
 
-        {isModelLoading && trackingActive && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(5, 7, 15, 0.85)', gap: '0.75rem'
-          }}>
-            <RefreshCw size={24} className="animate-spin" style={{ color: 'var(--hud-accent)' }} />
-            <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.75rem', color: 'var(--hud-accent)' }}>Calibrating Eye Tracking...</span>
-          </div>
-        )}
+          {isModelLoading && trackingActive && (
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(5, 7, 15, 0.85)', gap: '0.5rem'
+            }}>
+              <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--hud-accent)' }} />
+              <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.6rem', color: 'var(--hud-accent)' }}>Calibrating...</span>
+            </div>
+          )}
 
-        {errorMsg && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(5, 7, 15, 0.95)', gap: '1rem', padding: '2rem', textAlign: 'center'
-          }}>
-            <div style={{ color: 'var(--color-distracted)' }}>
-              <AlertTriangle size={36} />
+          {errorMsg && (
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(5, 7, 15, 0.95)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center'
+            }}>
+              <div style={{ color: 'var(--color-distracted)' }}>
+                <AlertTriangle size={24} />
+              </div>
+              <p style={{ fontSize: '0.55rem', color: 'var(--color-distracted)', lineHeight: '1.3' }}>Webcam Lock / In Use</p>
+              <button 
+                onClick={startTracking}
+                style={{
+                  background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--color-distracted)',
+                  fontSize: '0.6rem', padding: '0.2rem 0.6rem', cursor: 'pointer', borderRadius: '4px'
+                }}
+              >
+                Retry
+              </button>
             </div>
-            <div>
-              <h4 style={{ color: '#fff', fontSize: '0.85rem', fontFamily: 'var(--font-hud)', marginBottom: '0.25rem' }}>Hardware Stream Failure</h4>
-              <p style={{ fontSize: '0.7rem', color: 'var(--color-distracted)', lineHeight: '1.4' }}>{errorMsg}</p>
-            </div>
-            <button 
-              onClick={startTracking}
-              style={{
-                background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid var(--color-distracted)',
-                fontSize: '0.75rem', padding: '0.4rem 1.2rem', cursor: 'pointer', borderRadius: '4px'
-              }}
-            >
-              Try Again
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
         <span>Hardware: Standard Webcam</span>
         {trackingActive && (
           <button 
             onClick={stopTracking}
-            style={{ background: 'none', border: 'none', color: 'var(--color-distracted)', cursor: 'pointer', fontFamily: 'var(--font-hud)', fontSize: '0.7rem' }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-distracted)', cursor: 'pointer', fontFamily: 'var(--font-hud)', fontSize: '0.65rem' }}
           >
             Disable Stream
           </button>

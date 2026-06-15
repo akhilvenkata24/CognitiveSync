@@ -1,11 +1,11 @@
 import React from 'react';
-import { AlertOctagon, AlertTriangle, Bell, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { AlertOctagon, AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
 
 export default function AlertPanel({ alerts, operatorState, onAcknowledgeAlert, industry, attentionLevel = 0 }) {
   // Find active alerts
   const criticalAlerts = alerts.filter(a => a.status === 'active');
   
-  // Sort by priority: critical > high > low
+  // Sort by priority: critical (3) > high (2) > low (1)
   const sortedAlerts = [...criticalAlerts].sort((a, b) => {
     const priorityWeight = { critical: 3, high: 2, low: 1 };
     return priorityWeight[b.priority] - priorityWeight[a.priority];
@@ -19,106 +19,122 @@ export default function AlertPanel({ alerts, operatorState, onAcknowledgeAlert, 
   const showAdaptiveOverlay = attentionLevel === 3;
   const showEmergencyOverlay = attentionLevel === 4;
 
-  // Specific industry action subtexts
   const getIndustryWarningInstruction = () => {
-    if (topAlert) return topAlert.instruction || topAlert.message;
-
-    switch (industry) {
-      case 'aerospace':
-        return {
-          title: "GPWS TERRAIN WARNING",
-          subtext: "Pull up immediately. Active radar indicates low obstacle clearance.",
-          action: "PULL UP & HOLD"
-        };
-      case 'railways':
-        return {
-          title: "TRAIN CONTROL RESTRICTIVE ASPECT",
-          subtext: "Cab signal shows absolute stop. Speed exceeds emergency braking limits.",
-          action: "APPLY EMERGENCY BRAKES"
-        };
-      case 'mining':
-        return {
-          title: "COLLISION PROXIMITY ALERT",
-          subtext: "Proximity sensor tracks personnel inside vehicle blindspot radius.",
-          action: "HALT VEHICLE CORE"
-        };
-      case 'machinery':
-      default:
-        return {
-          title: "HYDRAULIC PRESSURE OVERLOAD",
-          subtext: "Internal lines exceed 94% threshold. Automated bypass failing.",
-          action: "ACTIVATE EMERGENCY BYPASS"
-        };
-    }
+    if (topAlert) return topAlert.action || topAlert.message;
+    return "PULL UP & HOLD";
   };
 
   const currentWarning = getIndustryWarningInstruction();
-  const warningTitle = topAlert ? topAlert.message : currentWarning.title;
-  const warningText = topAlert ? topAlert.description : currentWarning.subtext;
-  const warningAction = topAlert ? topAlert.action : currentWarning.action;
+  const warningTitle = topAlert ? topAlert.message : "GPWS TERRAIN WARNING";
+  const warningText = topAlert ? topAlert.description : "Pull up immediately. Active radar indicates low obstacle clearance.";
+  const warningAction = topAlert ? topAlert.action : "PULL UP & HOLD";
 
   return (
     <>
-      {/* 1. Main Warning Deck Widget */}
-      <div className="panel-card" style={{ flex: '1 1 300px', minHeight: '220px' }}>
-        <div className="panel-title">
-          <ShieldAlert size={14} /> Active Threat Matrix ({criticalAlerts.length})
-        </div>
-
-        <div className="alert-list">
-          {criticalAlerts.length === 0 ? (
-            <div className="empty-panel-msg" style={{ height: '120px' }}>
-              <CheckCircle2 size={30} style={{ color: 'var(--color-focused)', marginBottom: '0.4rem' }} />
-              <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-hud)' }}>ALL SYSTEMS OPTIMAL // ZERO FAULTS</span>
+      {/* Dynamic Alerts Stack */}
+      {sortedAlerts.length === 0 ? (
+        <div className="panel-card" style={{ flex: '0 0 auto' }}>
+          <div className="panel-title" style={{ color: 'var(--color-focused)', borderBottomColor: 'rgba(0, 230, 118, 0.15)' }}>
+            <CheckCircle2 size={14} style={{ color: 'var(--color-focused)' }} /> System Status Deck
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', padding: '0.25rem 0' }}>
+            <CheckCircle2 size={24} style={{ color: 'var(--color-focused)', filter: 'drop-shadow(var(--glow-focused))' }} />
+            <div>
+              <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-hud)', fontWeight: 'bold', color: '#fff', display: 'block' }}>
+                ALL AVIONICS SYSTEMS OPTIMAL
+              </span>
+              <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>
+                COGNITIVE PILOT FEED ACTIVE // ZERO FAULTS DETECTED
+              </span>
             </div>
-          ) : (
-            sortedAlerts.map(alert => {
-              const isLevel1Highlight = attentionLevel >= 1 && alert.priority === 'critical';
-              return (
-                <div 
-                  key={alert.id} 
-                  className={`alert-item priority-${alert.priority} ${isLevel1Highlight ? 'level1-highlight-alert' : ''}`}
+          </div>
+        </div>
+      ) : (
+        sortedAlerts.map(alert => {
+          const isCritical = alert.priority === 'critical';
+          const isHigh = alert.priority === 'high';
+          const themeColor = isCritical 
+            ? 'var(--color-distracted)' 
+            : (isHigh ? 'var(--color-normal)' : 'var(--hud-accent)');
+          const glowGlow = isCritical 
+            ? 'var(--glow-distracted)' 
+            : (isHigh ? 'var(--glow-normal)' : 'var(--hud-accent-glow)');
+
+          return (
+            <div 
+              key={alert.id}
+              className={`panel-card priority-${alert.priority}`}
+              style={{
+                flex: '0 0 auto',
+                borderColor: themeColor,
+                boxShadow: `0 8px 30px rgba(0, 0, 0, 0.55), ${glowGlow}`,
+                borderLeft: `5px solid ${themeColor}`,
+                transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+                padding: '1rem'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-hud)', fontSize: '0.72rem', fontWeight: 'bold', color: themeColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  {isCritical ? (
+                    <AlertOctagon size={13} style={{ animation: 'blink 0.8s infinite' }} />
+                  ) : (
+                    <AlertTriangle size={13} />
+                  )}
+                  <span>{alert.priority} FLIGHT WARNING</span>
+                </div>
+                <button
+                  onClick={() => onAcknowledgeAlert(alert.id)}
                   style={{
-                    clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))',
-                    border: '1px solid rgba(255,255,255,0.03)',
-                    borderLeft: '4px solid currentColor'
+                    padding: '0.2rem 0.5rem',
+                    fontSize: '0.55rem',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    color: '#fff',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-hud)',
+                    fontWeight: 'bold',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = themeColor;
+                    e.currentTarget.style.color = '#000';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                    e.currentTarget.style.color = '#fff';
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    {alert.priority === 'critical' ? (
-                      <AlertOctagon size={16} className="text-red" style={{ animation: 'blink 0.8s infinite' }} />
-                    ) : (
-                      <AlertTriangle size={16} className={alert.priority === 'high' ? 'text-orange' : 'text-cyan'} />
-                    )}
-                    <div>
-                      <div style={{ fontWeight: 'bold', fontSize: '0.75rem', fontFamily: 'var(--font-hud)' }}>{alert.message}</div>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{alert.description}</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => onAcknowledgeAlert(alert.id)}
-                    className="ack-button"
-                    style={{
-                      padding: '0.2rem 0.6rem',
-                      fontSize: '0.6rem',
-                      background: 'rgba(255,255,255,0.03)',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      clipPath: 'none',
-                      boxShadow: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ACK
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
+                  ACK FAULT
+                </button>
+              </div>
 
-      {/* 2. LEVEL 3 ADAPTIVE OVERLAY (Attention drops < 45) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <h3 style={{ fontSize: '0.85rem', fontWeight: '900', fontFamily: 'var(--font-hud)', color: '#fff', margin: 0, letterSpacing: '0.04em' }}>
+                  {alert.message}
+                </h3>
+                <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.35' }}>
+                  {alert.description}
+                </p>
+                <div style={{ 
+                  marginTop: '0.2rem', 
+                  background: 'rgba(0,0,0,0.25)', 
+                  padding: '0.35rem 0.5rem', 
+                  borderRadius: '4px', 
+                  border: `1px dashed rgba(255,255,255,0.06)`,
+                  fontSize: '0.62rem',
+                  fontFamily: 'var(--font-hud)',
+                  color: themeColor
+                }}>
+                  <strong style={{ color: '#fff', marginRight: '0.2rem' }}>DIRECTIVE:</strong> {alert.action || 'MONITOR AVIONICS BUS'}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+
+      {/* LEVEL 3 ADAPTIVE OVERLAY */}
       <div className={`adaptive-modal-overlay ${showAdaptiveOverlay ? 'active' : ''}`}>
         <div className="adaptive-alert-card" style={{ border: '2px solid var(--color-distracted)', boxShadow: 'var(--glow-distracted)' }}>
           <div className="alert-pulse-icon" style={{ background: 'rgba(255, 23, 68, 0.1)', color: 'var(--color-distracted)' }}>
@@ -165,7 +181,7 @@ export default function AlertPanel({ alerts, operatorState, onAcknowledgeAlert, 
         </div>
       </div>
 
-      {/* 3. LEVEL 4 EMERGENCY OVERLAY (Attention drops < 30 / Absense) */}
+      {/* LEVEL 4 EMERGENCY OVERLAY */}
       {showEmergencyOverlay && (
         <div className="level4-emergency-overlay">
           <div className="level4-card">
