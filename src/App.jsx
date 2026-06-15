@@ -58,7 +58,14 @@ export default function App() {
     ear: 0.25,
     gazeX: 0,
     gazeY: 0,
-    isBlinking: false
+    isBlinking: false,
+    gForce: 1.0,
+    pupilDilation: 3.2,
+    cognitiveSaturation: 12.0,
+    endsleyL1: 98,
+    endsleyL2: 95,
+    endsleyL3: 96,
+    scenario: 'nominal'
   });
 
   // Simulator values state
@@ -71,7 +78,14 @@ export default function App() {
     ear: 0.28,
     gazeX: 2.5,
     gazeY: -1.2,
-    isBlinking: false
+    isBlinking: false,
+    gForce: 1.0,
+    pupilDilation: 3.2,
+    cognitiveSaturation: 12.0,
+    endsleyL1: 98,
+    endsleyL2: 95,
+    endsleyL3: 96,
+    scenario: 'nominal'
   });
 
   const [alerts, setAlerts] = useState(initialAlertPresets.aerospace);
@@ -185,7 +199,25 @@ export default function App() {
   // Handle telemetry update from the camera
   const handleCameraTelemetry = (newTelemetry) => {
     if (!isSimulating) {
-      setTelemetry(newTelemetry);
+      // Calculate dynamic cognitive stats on the fly from camera variables
+      const CS = Math.min(100, Math.max(0, 100 - newTelemetry.attentionScore + (newTelemetry.isBlinking ? 20 : 0)));
+      const PD = 3.0 + (CS / 100) * 4.0; // Dilate pupil as cognitive load grows
+      
+      // Endsley Levels computation
+      const l1 = Math.round(newTelemetry.attentionScore); // Perception correlates to raw attention
+      const l2 = Math.round(newTelemetry.detected ? Math.max(0, newTelemetry.attentionScore * 0.95 - Math.abs(newTelemetry.yaw) * 0.5) : 0); // Comprehension drops if head yaw is high
+      const l3 = Math.round(newTelemetry.detected ? Math.max(0, l2 * 0.98 - Math.abs(newTelemetry.pitch) * 0.5) : 0); // Projection drops if head pitch is high
+      
+      setTelemetry({
+        ...newTelemetry,
+        gForce: 1.0, // Camera operates under 1G standard
+        pupilDilation: parseFloat(PD.toFixed(2)),
+        cognitiveSaturation: parseFloat(CS.toFixed(1)),
+        endsleyL1: l1,
+        endsleyL2: l2,
+        endsleyL3: l3,
+        scenario: 'nominal'
+      });
     }
   };
 
@@ -202,7 +234,14 @@ export default function App() {
         ear: simState.ear,
         gazeX: simState.gazeX,
         gazeY: simState.gazeY,
-        isBlinking: simState.isBlinking
+        isBlinking: simState.isBlinking,
+        gForce: simState.gForce,
+        pupilDilation: simState.pupilDilation,
+        cognitiveSaturation: simState.cognitiveSaturation,
+        endsleyL1: simState.endsleyL1,
+        endsleyL2: simState.endsleyL2,
+        endsleyL3: simState.endsleyL3,
+        scenario: simState.scenario
       });
     }
   }, [isSimulating, simState]);
