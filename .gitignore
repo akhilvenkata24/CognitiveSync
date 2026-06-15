@@ -24,4 +24,6 @@ dist-ssr
 *.sw?
 *.db
 *.sqlite
+__pycache__/
+*.pyc
 
