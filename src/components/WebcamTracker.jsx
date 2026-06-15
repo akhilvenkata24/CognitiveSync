@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera as CameraIcon, AlertTriangle, RefreshCw } from 'lucide-react';
 
-export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeState }) {
+export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeState, onTrackingStateChange }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraInstanceRef = useRef(null);
@@ -74,6 +74,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
             cameraInstanceRef.current = camera;
             setTrackingActive(true);
             setIsModelLoading(false);
+            if (onTrackingStateChange) onTrackingStateChange(true);
           }
         };
       }
@@ -97,6 +98,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     }
     setTrackingActive(false);
     closedEyesStartRef.current = null;
+    if (onTrackingStateChange) onTrackingStateChange(false);
 
     // Clear canvas
     const canvas = canvasRef.current;

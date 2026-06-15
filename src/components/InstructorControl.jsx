@@ -238,6 +238,32 @@ export default function InstructorControl({
               </div>
             </div>
 
+            {/* Gaze Simulation Sliders */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                  <span>Eye Gaze X</span>
+                  <span style={{ color: '#fff' }}>{simState.gazeX}°</span>
+                </div>
+                <input 
+                  type="range" min="-30" max="30" step="0.5" value={simState.gazeX}
+                  onChange={(e) => updateSimValues({ gazeX: parseFloat(e.target.value) })}
+                  style={{ width: '100%', accentColor: '#ff9100' }}
+                />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                  <span>Eye Gaze Y</span>
+                  <span style={{ color: '#fff' }}>{simState.gazeY}°</span>
+                </div>
+                <input 
+                  type="range" min="-20" max="20" step="0.5" value={simState.gazeY}
+                  onChange={(e) => updateSimValues({ gazeY: parseFloat(e.target.value) })}
+                  style={{ width: '100%', accentColor: '#ff9100' }}
+                />
+              </div>
+            </div>
+
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>

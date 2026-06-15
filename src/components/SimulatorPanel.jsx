@@ -74,25 +74,8 @@ export default function SimulatorPanel({
         <Sliders size={16} /> Industry Scenario Simulator
       </div>
 
-      {/* 1. Override Toggle */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255, 255, 255, 0.02)', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Compass size={16} style={{ color: 'var(--hud-accent)' }} />
-          <div>
-            <span style={{ fontSize: '0.8rem', fontWeight: '600', display: 'block' }}>Simulation Mode Override</span>
-            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>Bypasses webcam tracking with mock coordinates</span>
-          </div>
-        </div>
-        <button 
-          onClick={onToggleSimulating}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: isSimulating ? 'var(--hud-accent)' : 'var(--text-muted)' }}
-        >
-          {isSimulating ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
-        </button>
-      </div>
-
-      {/* 2. Simulator State Inputs (Enabled only when override active) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', opacity: isSimulating ? 1 : 0.25, pointerEvents: isSimulating ? 'all' : 'none', transition: 'opacity 0.2s' }}>
+      {/* 2. Simulator State Inputs */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
         <div>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
             Forced State Selection:
@@ -166,6 +149,32 @@ export default function SimulatorPanel({
             </div>
           </div>
 
+          {/* Gaze Simulation Sliders */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                <span>Eye Gaze X</span>
+                <span>{simState.gazeX}°</span>
+              </div>
+              <input 
+                type="range" min="-30" max="30" step="0.5" value={simState.gazeX}
+                onChange={(e) => updateSimValues({ gazeX: parseFloat(e.target.value) })}
+                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
+              />
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                <span>Eye Gaze Y</span>
+                <span>{simState.gazeY}°</span>
+              </div>
+              <input 
+                type="range" min="-20" max="20" step="0.5" value={simState.gazeY}
+                onChange={(e) => updateSimValues({ gazeY: parseFloat(e.target.value) })}
+                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
+              />
+            </div>
+          </div>
+
           {/* New Sliders: G-Force Load, Pupil Dilation, Cognitive Saturation */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
             <div>
@@ -207,7 +216,7 @@ export default function SimulatorPanel({
       </div>
 
       {/* 2.5. Mission Scenario Controls */}
-      <div style={{ opacity: isSimulating ? 1 : 0.25, pointerEvents: isSimulating ? 'all' : 'none', transition: 'opacity 0.2s', marginTop: '0.4rem' }}>
+      <div style={{ marginTop: '0.4rem' }}>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
           Trigger Tactical Cockpit Scenarios:
         </span>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldAlert, Compass, Users, Clock, AlertTriangle, Database } from 'lucide-react';
+import { ShieldAlert, Compass, Users, Clock, AlertTriangle, Database, Eye } from 'lucide-react';
 import WebcamTracker from './components/WebcamTracker';
 import TelemetryPanel from './components/TelemetryPanel';
 import AlertPanel from './components/AlertPanel';
@@ -11,8 +11,8 @@ import { startAlarm, stopAlarm, playBeep } from './audio';
 // Default presets for alerts on load to showcase adaptive overlay
 const initialAlertPresets = {
   aerospace: [
-    { id: 'al_a1', message: "AUTOPILOT DISCONNECT", description: "Autopilot disengaged. Restoring manual stick feedback.", priority: "high", action: "TAKE MANUAL CONTROL", status: "active" },
-    { id: 'al_a2', message: "FUEL TEMP LOW", description: "Wing tank temperature near freezing threshold.", priority: "low", action: "MONITOR DE-ICER", status: "active" }
+    { id: 'al_a1', message: "TCAS COLLISION AVOIDANCE", description: "TRAFFIC ALERT: -1225FT | RANGE: 2.4 NM | CLOSURE: 382 kts", priority: "critical", action: "CMD: CLIMB RATE > 1500 FT/MIN", status: "active" },
+    { id: 'al_a2', message: "AUTOPILOT DISCONNECT", description: "Autopilot disengaged. Restoring manual stick feedback.", priority: "high", action: "TAKE MANUAL CONTROL", status: "active" }
   ],
   railways: [
     { id: 'al_r1', message: "TRACK FAULT DETECTED", description: "Active telemetry indicates switch alignment deviation.", priority: "high", action: "REDUCE SPEED TO 30KM/H", status: "active" },
@@ -30,7 +30,8 @@ const initialAlertPresets = {
 
 export default function App() {
   const [industry, setIndustry] = useState('aerospace');
-  const [isSimulating, setIsSimulating] = useState(false);
+  const [visorGazeLock, setVisorGazeLock] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(true);
   const [currentView, setCurrentView] = useState(() => {
     const path = window.location.pathname;
     if (path === '/twin') return 'twin';
@@ -621,7 +622,7 @@ export default function App() {
         </div>
 
         {/* Console View Mode Switcher */}
-        <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', alignItems: 'center' }}>
           <button 
             className={`industry-tab ${currentView === 'cockpit' ? 'active' : ''}`}
             onClick={() => navigateToView('cockpit')}
@@ -638,6 +639,37 @@ export default function App() {
             Digital Twin
           </button>
         </div>
+
+        {/* Visor Gaze Lock Switcher */}
+        {currentView === 'cockpit' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem 0.6rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <span style={{ fontSize: '0.65rem', fontFamily: 'var(--font-hud)', color: visorGazeLock ? 'var(--hud-accent)' : 'var(--text-secondary)', textShadow: visorGazeLock ? 'var(--hud-accent-glow)' : 'none', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Visor Gaze Lock: {visorGazeLock ? 'ENGAGED' : 'DISENGAGED'}
+            </span>
+            <button
+              onClick={() => {
+                playBeep(800, 0.08, 'sine', 0.1);
+                setVisorGazeLock(!visorGazeLock);
+              }}
+              className={`industry-tab ${visorGazeLock ? 'active' : ''}`}
+              style={{ 
+                fontSize: '0.65rem', 
+                padding: '0.25rem 0.6rem',
+                borderColor: visorGazeLock ? 'var(--hud-accent)' : 'rgba(255,255,255,0.08)',
+                background: visorGazeLock ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255,255,255,0.02)',
+                color: visorGazeLock ? '#fff' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              <Eye size={12} style={{ color: visorGazeLock ? 'var(--hud-accent)' : 'var(--text-secondary)' }} />
+              {visorGazeLock ? 'DEACTIVATE' : 'ACTIVATE'}
+            </button>
+          </div>
+        )}
 
         {/* Info badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }} className={attentionLevel >= 2 ? 'level2-dimmed' : ''}>
@@ -672,6 +704,7 @@ export default function App() {
               onTelemetryUpdate={handleCameraTelemetry} 
               isSimulating={isSimulating}
               activeState={telemetry.state}
+              onTrackingStateChange={(isActive) => setIsSimulating(!isActive)}
             />
             <SimulatorPanel 
               isSimulating={isSimulating}
@@ -697,6 +730,10 @@ export default function App() {
               onAcknowledgeAlert={handleAcknowledgeAlert}
               industry={industry}
               attentionLevel={attentionLevel}
+              gazeX={telemetry.gazeX}
+              gazeY={telemetry.gazeY}
+              visorGazeLock={visorGazeLock}
+              setVisorGazeLock={setVisorGazeLock}
             />
             <TelemetryPanel 
               telemetry={telemetry}
