@@ -30,18 +30,27 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
   const [vibration, setVibration] = useState(1.1);
   const [radarSweepAngle, setRadarSweepAngle] = useState(0);
 
+  // Dynamic state variables to remove static cockpit details
+  const [leftFuel, setLeftFuel] = useState(4280.0);
+  const [rightFuel, setRightFuel] = useState(4290.0);
+  const [ittTemp, setIttTemp] = useState(682);
+  const [fuelTemp, setFuelTemp] = useState(14);
+  const [weatherDistance, setWeatherDistance] = useState(14.2);
+  const [weatherHeading, setWeatherHeading] = useState(95);
+  const [stormWarning, setStormWarning] = useState("WARN: TURBULENCE INDEX MODERATE");
+
+  // Dynamic TCAS Targets
+  const [tcasTargets, setTcasTargets] = useState([
+    { id: 1, relX: 18, relY: -22, altDiff: 700, label: 'TGT-048', range: 1.8, closure: 410 },
+    { id: 2, relX: -35, relY: 40, altDiff: -1200, label: 'TGT-192', range: 4.2, closure: 380 }
+  ]);
+
   // ARINC 429 Data stream state
   const [arincFeed, setArincFeed] = useState([
     "310 LAT ENCODE: 40°44.22'N  [HEX: 310A74FB]",
     "311 LON ENCODE: 073°59.10'W [HEX: 31102A8C]",
     "150 BARO ALT: 33,004 FT     [HEX: 1500F8BC]",
     "270 MASTER CAUTION: NOMINAL [HEX: 270000FF]"
-  ]);
-
-  // stable intruder targets
-  const [tcasTargets] = useState([
-    { id: 1, relX: 18, relY: -22, altDiff: '+700', label: 'TGT-048' },
-    { id: 2, relX: -35, relY: 40, altDiff: '-1200', label: 'TGT-192' }
   ]);
 
   // Keep a reference to latest telemetry to avoid recreates
@@ -56,6 +65,12 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
       history.shift();
     }
   }, [yaw, pitch, roll, attentionScore, gazeX, gazeY]);
+
+  // Ref to track dynamic parameters to avoid interval stale closures
+  const statsRef = useRef({ throttle, fuelFlow, altitude });
+  useEffect(() => {
+    statsRef.current = { throttle, fuelFlow, altitude };
+  }, [throttle, fuelFlow, altitude]);
 
   // Simulate active variables & ARINC 429 streams
   useEffect(() => {
@@ -81,6 +96,91 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
         return parseFloat(Math.min(3.0, Math.max(0.1, prev + drift)).toFixed(2));
       });
       setRadarSweepAngle(prev => (prev + 2.5) % 360);
+
+      // Fluctuate turbine ITT temperature based on current throttle
+      setIttTemp(prev => {
+        const baseItt = 520 + statsRef.current.throttle * 2.1;
+        const drift = (Math.random() - 0.5) * 3;
+        return Math.round(baseItt + drift);
+      });
+
+      // Decrease fuel based on fuel flow rate (tick is 120ms, which is 0.12s)
+      setLeftFuel(prev => {
+        const burn = (statsRef.current.fuelFlow / 3600) * 0.12;
+        return parseFloat(Math.max(0, prev - burn / 2).toFixed(1));
+      });
+      setRightFuel(prev => {
+        const burn = (statsRef.current.fuelFlow / 3600) * 0.12;
+        return parseFloat(Math.max(0, prev - burn / 2).toFixed(1));
+      });
+
+      // Fluctuate fuel temp slightly based on altitude
+      setFuelTemp(prev => {
+        const targetTemp = Math.round(15 - (statsRef.current.altitude / 8000));
+        const drift = (Math.random() - 0.5) * 0.5;
+        return Math.round(targetTemp + drift);
+      });
+
+      // Fluctuate weather storm values
+      setWeatherDistance(prev => {
+        const drift = (Math.random() - 0.5) * 0.08;
+        return parseFloat(Math.max(2.0, prev + drift).toFixed(1));
+      });
+      setWeatherHeading(prev => {
+        const drift = (Math.random() - 0.5) * 0.15;
+        return Math.round(Math.max(0, Math.min(360, prev + drift)));
+      });
+      setStormWarning(prev => {
+        if (Math.random() < 0.05) {
+          const warnings = [
+            "WARN: TURBULENCE INDEX MODERATE",
+            "WARN: CONVECTIVE STORM CELL DETECTED",
+            "NOTICE: RADAR REFLECTIVITY ELEVATED",
+            "INFO: PRECIP LEVEL NOMINAL FL330"
+          ];
+          return warnings[Math.floor(Math.random() * warnings.length)];
+        }
+        return prev;
+      });
+
+      // Drift TCAS Targets dynamically
+      setTcasTargets(prev => prev.map(tgt => {
+        let dx = (Math.random() - 0.5) * 0.3;
+        let dy = (Math.random() - 0.5) * 0.3;
+        
+        // Target 1 slowly drifts toward center (intruder!)
+        if (tgt.id === 1) {
+          dx = -0.15;
+          dy = 0.15;
+        } else {
+          dx = 0.08;
+          dy = -0.08;
+        }
+
+        let newX = tgt.relX + dx;
+        let newY = tgt.relY + dy;
+
+        // Reset if they touch center or leave bounds
+        if (Math.abs(newX) < 4 && Math.abs(newY) < 4) {
+          newX = (Math.random() > 0.5 ? 35 : -35);
+          newY = (Math.random() > 0.5 ? 35 : -35);
+        } else if (Math.abs(newX) > 42 || Math.abs(newY) > 42) {
+          newX = (Math.random() > 0.5 ? 20 : -20);
+          newY = (Math.random() > 0.5 ? 20 : -20);
+        }
+
+        const calculatedRange = parseFloat((Math.sqrt(newX*newX + newY*newY) / 15).toFixed(1));
+        const calculatedClosure = Math.round(390 + (Math.random() - 0.5) * 30);
+
+        return {
+          ...tgt,
+          relX: parseFloat(newX.toFixed(1)),
+          relY: parseFloat(newY.toFixed(1)),
+          range: calculatedRange,
+          closure: calculatedClosure,
+          altDiff: tgt.altDiff + Math.round((Math.random() - 0.5) * 6)
+        };
+      }));
 
       // Periodically update ARINC 429 lines
       setArincFeed(prev => {
@@ -185,12 +285,10 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
       ctx.lineWidth = 1;
       terrainScroll = (terrainScroll + 0.6) % 35; // scroll speed
       
-      const gridYStart = 0;
       const spacingY = 24;
 
-      // Draw perspective columns (radiating out from horizon center)
+      // Draw perspective columns
       for (let col = -gridCols; col <= gridCols; col++) {
-        // Perspective slant based on yaw
         const xHorizon = col * 8 - currentYaw * 0.8;
         const xScreenBase = col * 90 - currentYaw * 2.5;
 
@@ -201,18 +299,16 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
         ctx.stroke();
       }
 
-      // Draw perspective rows (parallel lines spacing out exponentially)
+      // Draw perspective rows
       for (let row = 0; row < gridRows; row++) {
         const relativeY = row * spacingY + terrainScroll;
-        // Exponential perspective compression
         const scale = relativeY / h;
-        const py = relativeY * scale; // curve downwards to simulate depth
+        const py = relativeY * scale;
         
         if (py > 0 && py < h) {
           const opacity = Math.max(0.01, (1.0 - py / h)) * 0.35;
           ctx.strokeStyle = `rgba(0, 240, 255, ${opacity})`;
 
-          // Draw the horizontal line spanning across columns
           ctx.beginPath();
           ctx.moveTo(-w, py);
           ctx.lineTo(w, py);
@@ -333,12 +429,10 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
       if (showHeatmap) {
         const history = gazeHistoryRef.current;
         if (history.length > 1) {
-          // 1. Draw connecting saccade vector trail
           ctx.lineWidth = 1;
           ctx.strokeStyle = 'rgba(213, 0, 249, 0.25)'; // Magenta trail
           ctx.beginPath();
           history.forEach((pt, idx) => {
-            // Map normalized coordinates [-15 to +15] to canvas space
             const cx = centerX + (pt.x * (centerX / 15));
             const cy = centerY - (pt.y * (centerY / 15));
             if (idx === 0) ctx.moveTo(cx, cy);
@@ -346,18 +440,16 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
           });
           ctx.stroke();
 
-          // 2. Draw fading attention heat circles
           history.forEach((pt, idx) => {
             const cx = centerX + (pt.x * (centerX / 15));
             const cy = centerY - (pt.y * (centerY / 15));
             
-            // Fading opacity based on index
             const op = (idx / history.length) * 0.4;
             const r = 15 + (idx / history.length) * 20;
 
             const radialGrad = ctx.createRadialGradient(cx, cy, 1, cx, cy, r);
-            radialGrad.addColorStop(0, `rgba(255, 23, 68, ${op})`);      // Foveal red
-            radialGrad.addColorStop(0.5, `rgba(255, 145, 0, ${op * 0.5})`); // Amber decay
+            radialGrad.addColorStop(0, `rgba(255, 23, 68, ${op})`);
+            radialGrad.addColorStop(0.5, `rgba(255, 145, 0, ${op * 0.5})`);
             radialGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
             
             ctx.fillStyle = radialGrad;
@@ -430,6 +522,10 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
   };
 
   const memoryBuffer = getWorkingMemoryBuffer();
+
+  // Determine closest TCAS target threat
+  const closestTarget = tcasTargets.reduce((prev, curr) => (curr.range < prev.range ? curr : prev), tcasTargets[0]);
+  const isTrafficThreat = closestTarget && closestTarget.range < 2.5;
 
   return (
     <div className="glass-cockpit-container">
@@ -555,10 +651,10 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
         </div>
 
         {/* ==========================================
-            3. TCAS TRAFFIC PROXIMITY SYSTEM (CRITICAL)
+            3. TCAS TRAFFIC PROXIMITY SYSTEM (DYNAMIC)
            ========================================== */}
         <div 
-          className={`glass-cockpit-card ${getAdaptiveClass('critical')} ${attentionLevel >= 1 ? 'level1-highlight-alert' : ''}`}
+          className={`glass-cockpit-card ${getAdaptiveClass('critical')} ${isTrafficThreat ? 'level1-highlight-alert' : ''}`}
           style={{ transition: 'all 0.5s' }}
         >
           <div className="hud-corner-bracket bracket-tl" />
@@ -570,10 +666,16 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
 
           <div className="panel-title" style={{ display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              <ShieldAlert size={13} style={{ color: '#ff1744' }} /> 
+              <ShieldAlert size={13} style={{ color: isTrafficThreat ? '#ff1744' : '#00e676' }} /> 
               TCAS COLLISION AVOIDANCE
             </span>
-            <span style={{ color: '#ff1744', fontSize: '0.6rem', animation: 'blink 1s infinite' }}>WARN INTRUDER</span>
+            <span style={{ 
+              color: isTrafficThreat ? '#ff1744' : '#00e676', 
+              fontSize: '0.6rem', 
+              animation: isTrafficThreat ? 'blink 1s infinite' : 'none' 
+            }}>
+              {isTrafficThreat ? 'WARN INTRUDER' : 'STANDBY SCAN'}
+            </span>
           </div>
 
           <div style={{ display: 'flex', gap: '1.2rem', alignItems: 'center', height: '95px', marginTop: '0.2rem' }}>
@@ -600,9 +702,10 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
                 <div 
                   key={tgt.id}
                   style={{
-                    width: '6px', height: '6px', background: '#ff1744', borderRadius: '50%',
+                    width: '6px', height: '6px', background: tgt.range < 2.5 ? '#ff1744' : '#ffc107', borderRadius: '50%',
                     position: 'absolute', top: `calc(50% + ${tgt.relY}px)`, left: `calc(50% + ${tgt.relX}px)`,
-                    boxShadow: '0 0 10px #ff1744', animation: 'blink 0.8s infinite'
+                    boxShadow: tgt.range < 2.5 ? '0 0 10px #ff1744' : '0 0 5px #ffc107', 
+                    animation: tgt.range < 2.5 ? 'blink 0.8s infinite' : 'none'
                   }}
                   title={`${tgt.label} alt: ${tgt.altDiff}`}
                 />
@@ -610,22 +713,30 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
             </div>
 
             <div style={{ flex: 1 }}>
-              <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontFamily: 'var(--font-hud)' }}>Proximity Advisory</span>
-              <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.9rem', color: '#ff1744', display: 'block', fontWeight: 'bold' }}>
-                TRAFFIC DETECTED: +700FT
+              <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontFamily: 'var(--font-hud)' }}>
+                {isTrafficThreat ? 'Proximity Threat Warning' : 'Proximity Advisory'}
+              </span>
+              <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.9rem', color: isTrafficThreat ? '#ff1744' : '#00e676', display: 'block', fontWeight: 'bold' }}>
+                {isTrafficThreat 
+                  ? `TRAFFIC ALERT: ${closestTarget.altDiff > 0 ? '+' : ''}${closestTarget.altDiff}FT` 
+                  : 'NO TRAFFIC THREATS // CLEAN'}
               </span>
               <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-hud)', display: 'block', marginTop: '1px' }}>
-                RANGE: 1.8 NM | CLOSURE: 410 kts
+                {isTrafficThreat 
+                  ? `RANGE: ${closestTarget.range} NM | CLOSURE: ${closestTarget.closure} kts` 
+                  : 'TCAS SCAN MODE DETECTING'}
               </span>
               <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-hud)', display: 'block' }}>
-                CMD: CLIMB RATE &gt; 1500 FT/MIN
+                {isTrafficThreat 
+                  ? `CMD: CLIMB RATE > 1500 FT/MIN` 
+                  : 'STANDBY ADVISORY LIMITS'}
               </span>
             </div>
           </div>
         </div>
 
         {/* ==========================================
-            4. NAVIGATION COMPASS & WEATHER RADAR
+            4. NAVIGATION COMPASS & WEATHER RADAR (DYNAMIC)
            ========================================== */}
         <div className={`glass-cockpit-card ${getAdaptiveClass('high')}`}>
           <div className="hud-corner-bracket bracket-tl" />
@@ -676,17 +787,17 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
                 WEATHER CELL DETECTED
               </span>
               <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-hud)', display: 'block', marginTop: '1px' }}>
-                CELL CELL-A9: 14 NM | HEADING: 095°
+                CELL CELL-A9: {weatherDistance.toFixed(1)} NM | HEADING: {weatherHeading.toString().padStart(3, '0')}°
               </span>
               <span style={{ fontSize: '0.62rem', color: '#ff9100', fontFamily: 'var(--font-hud)', display: 'block' }}>
-                WARN: TURBULENCE INDEX MODERATE
+                {stormWarning}
               </span>
             </div>
           </div>
         </div>
 
         {/* ==========================================
-            5. ENGINE MONITORING DECK (EICAS)
+            5. ENGINE MONITORING DECK (EICAS - DYNAMIC)
            ========================================== */}
         <div className={`glass-cockpit-card ${getAdaptiveClass('medium')}`}>
           <div className="hud-corner-bracket bracket-tl" />
@@ -739,15 +850,15 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
             </div>
 
             <div style={{ fontFamily: 'var(--font-hud)', fontSize: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-              <div><span style={{ color: 'var(--text-secondary)' }}>ITT TEMP:</span> <span style={{ color: '#fff', fontWeight: 'bold' }}>682°C</span></div>
+              <div><span style={{ color: 'var(--text-secondary)' }}>ITT TEMP:</span> <span style={{ color: '#fff', fontWeight: 'bold' }}>{ittTemp}°C</span></div>
               <div><span style={{ color: 'var(--text-secondary)' }}>VIB LEVEL:</span> <span style={{ color: '#fff', fontWeight: 'bold' }}>{vibration} IPS</span></div>
-              <div><span style={{ color: 'var(--text-secondary)' }}>FUEL TEMP:</span> <span style={{ color: '#00e676', fontWeight: 'bold' }}>+14°C</span></div>
+              <div><span style={{ color: 'var(--text-secondary)' }}>FUEL TEMP:</span> <span style={{ color: fuelTemp < 0 ? 'var(--color-distracted)' : '#00e676', fontWeight: 'bold' }}>{fuelTemp > 0 ? '+' : ''}{fuelTemp}°C</span></div>
             </div>
           </div>
         </div>
 
         {/* ==========================================
-            6. FUEL & PROPULSION MANAGEMENT
+            6. FUEL & PROPULSION MANAGEMENT (DYNAMIC)
            ========================================== */}
         <div className={`glass-cockpit-card ${getAdaptiveClass('medium')}`}>
           <div className="hud-corner-bracket bracket-tl" />
@@ -766,11 +877,11 @@ export default function AerospaceCockpit({ attentionLevel, telemetry }) {
             <div style={{ flex: 1 }}>
               <div className="telemetry-row" style={{ padding: '0.2rem 0' }}>
                 <span className="telemetry-label">Left Outer Tank</span>
-                <span className="telemetry-val">4,280 lbs</span>
+                <span className="telemetry-val" style={{ fontFamily: 'var(--font-hud)' }}>{Math.round(leftFuel).toLocaleString()} lbs</span>
               </div>
               <div className="telemetry-row" style={{ padding: '0.2rem 0' }}>
                 <span className="telemetry-label">Right Outer Tank</span>
-                <span className="telemetry-val">4,290 lbs</span>
+                <span className="telemetry-val" style={{ fontFamily: 'var(--font-hud)' }}>{Math.round(rightFuel).toLocaleString()} lbs</span>
               </div>
             </div>
             <div style={{

@@ -5,6 +5,7 @@ import TelemetryPanel from './components/TelemetryPanel';
 import AlertPanel from './components/AlertPanel';
 import SimulatorPanel from './components/SimulatorPanel';
 import DigitalTwinDashboard from './components/DigitalTwinDashboard';
+import InstructorControl from './components/InstructorControl';
 import { startAlarm, stopAlarm, playBeep } from './audio';
 
 // Default presets for alerts on load to showcase adaptive overlay
@@ -31,13 +32,18 @@ export default function App() {
   const [industry, setIndustry] = useState('aerospace');
   const [isSimulating, setIsSimulating] = useState(false);
   const [currentView, setCurrentView] = useState(() => {
-    return window.location.pathname === '/twin' ? 'twin' : 'cockpit';
+    const path = window.location.pathname;
+    if (path === '/twin') return 'twin';
+    if (path === '/control') return 'control';
+    return 'cockpit';
   });
 
   const navigateToView = (view) => {
     setCurrentView(view);
     if (view === 'twin') {
       window.history.pushState({}, '', '/twin');
+    } else if (view === 'control') {
+      window.history.pushState({}, '', '/control');
     } else {
       window.history.pushState({}, '', '/');
     }
@@ -89,6 +95,7 @@ export default function App() {
   });
 
   const [alerts, setAlerts] = useState(initialAlertPresets.aerospace);
+  const scenarioIntervalRef = useRef(null);
 
   // Sync clock time
   useEffect(() => {
@@ -104,7 +111,10 @@ export default function App() {
   // Sync back/forward browser buttons
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentView(window.location.pathname === '/twin' ? 'twin' : 'cockpit');
+      const path = window.location.pathname;
+      if (path === '/twin') setCurrentView('twin');
+      else if (path === '/control') setCurrentView('control');
+      else setCurrentView('cockpit');
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -337,7 +347,255 @@ export default function App() {
     }
   };
 
+  // Clear running scenario intervals on toggle
+  useEffect(() => {
+    if (!isSimulating && scenarioIntervalRef.current) {
+      clearInterval(scenarioIntervalRef.current);
+      scenarioIntervalRef.current = null;
+    }
+  }, [isSimulating]);
+
+  // Unified updater for simulator state
+  const updateSimValues = (updates) => {
+    setSimState(prev => {
+      const nextState = { ...prev, ...updates };
+      
+      if (updates.attentionScore !== undefined) {
+        const score = updates.attentionScore;
+        if (score < 30) nextState.state = 'fatigued';
+        else if (score < 55) nextState.state = 'distracted';
+        else if (score < 75) nextState.state = 'normal';
+        else nextState.state = 'focused';
+      }
+
+      // Re-evaluate Endsley SA
+      const baseScore = nextState.attentionScore ?? 100;
+      const sat = nextState.cognitiveSaturation ?? 12;
+      const satFactor = (100 - sat) / 100;
+      
+      nextState.endsleyL1 = Math.round(Math.max(0, baseScore * (0.3 + 0.7 * satFactor)));
+      nextState.endsleyL2 = Math.round(Math.max(0, nextState.endsleyL1 * 0.95 - Math.abs(nextState.yaw ?? 0) * 0.5));
+      nextState.endsleyL3 = Math.round(Math.max(0, nextState.endsleyL2 * 0.90 - Math.abs(nextState.pitch ?? 0) * 0.5 - ((nextState.gForce ?? 1.0) - 1.0) * 8));
+
+      return nextState;
+    });
+  };
+
+  // Scenario 1: Wind Shear
+  const triggerWindShear = () => {
+    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
+    
+    handleTriggerMockAlert({
+      id: `pres_windshear_${Date.now()}`,
+      message: "WIND SHEAR AHEAD",
+      description: "Severe wind shear detected by predictive radar. Escape flight path active.",
+      priority: "critical",
+      action: "MAX THROTTLE / TOGA DETENT"
+    });
+
+    let count = 0;
+    const interval = setInterval(() => {
+      count++;
+      const cycle = count % 4;
+      let pitchVal = 12;
+      let rollVal = -15;
+      let yawVal = 8;
+      
+      if (cycle === 1) {
+        pitchVal = 16;
+        rollVal = 20;
+        yawVal = -10;
+      } else if (cycle === 2) {
+        pitchVal = 8;
+        rollVal = -25;
+        yawVal = 5;
+      } else if (cycle === 3) {
+        pitchVal = 14;
+        rollVal = 12;
+        yawVal = -4;
+      }
+
+      updateSimValues({
+        scenario: 'wind_shear',
+        pitch: pitchVal,
+        roll: rollVal,
+        yaw: yawVal,
+        gForce: parseFloat((2.0 + Math.random() * 1.5).toFixed(1)),
+        attentionScore: 85,
+        cognitiveSaturation: 75,
+        pupilDilation: 4.5
+      });
+
+      if (count >= 15) {
+        clearInterval(interval);
+        updateSimValues({ scenario: 'nominal', gForce: 1.0 });
+      }
+    }, 500);
+    scenarioIntervalRef.current = interval;
+  };
+
+  // Scenario 2: Hypoxia
+  const triggerHypoxia = () => {
+    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
+
+    handleTriggerMockAlert({
+      id: `pres_hypoxia_warn_${Date.now()}`,
+      message: "CABIN PRESSURE WARNING",
+      description: "Cabin altitude exceeds 14,000 FT. Potential slow decompression detected.",
+      priority: "high",
+      action: "DON OXYGEN MASK"
+    });
+
+    let currentScore = simState.attentionScore;
+    let currentPupil = simState.pupilDilation;
+    let currentSaturation = simState.cognitiveSaturation;
+    let currentEar = simState.ear;
+    let criticalAlertTriggered = false;
+
+    const interval = setInterval(() => {
+      currentScore = Math.max(8, currentScore - 6);
+      currentPupil = Math.min(8.0, currentPupil + 0.35);
+      currentSaturation = Math.min(100, currentSaturation + 6);
+      currentEar = Math.max(0.03, currentEar - 0.02);
+
+      updateSimValues({
+        scenario: 'hypoxia',
+        attentionScore: currentScore,
+        pupilDilation: parseFloat(currentPupil.toFixed(2)),
+        cognitiveSaturation: parseFloat(currentSaturation.toFixed(1)),
+        ear: parseFloat(currentEar.toFixed(3)),
+        isBlinking: currentScore < 50 ? (Math.random() > 0.3) : false,
+        yaw: Math.round(simState.yaw + (Math.random() - 0.5) * 4),
+        pitch: Math.max(-25, Math.round(simState.pitch - 1))
+      });
+
+      if (currentScore <= 28 && !criticalAlertTriggered) {
+        criticalAlertTriggered = true;
+        handleTriggerMockAlert({
+          id: `pres_hypoxia_crit_${Date.now()}`,
+          message: "PILOT HYPOXIA HAZARD",
+          description: "Operator responsiveness critical. Initiating cockpit interface simplification.",
+          priority: "critical",
+          action: "ESTABLISH PILOT INTERACTION OR CO-PILOT HANDOFF"
+        });
+      }
+
+      if (currentScore <= 8) {
+        clearInterval(interval);
+      }
+    }, 800);
+    scenarioIntervalRef.current = interval;
+  };
+
+  // Scenario 3: Engine Flameout
+  const triggerEngineFlameout = () => {
+    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
+
+    updateSimValues({
+      scenario: 'flameout',
+      attentionScore: 92,
+      cognitiveSaturation: 82,
+      pupilDilation: 5.5,
+      yaw: 0,
+      pitch: -2,
+      gForce: 1.0
+    });
+
+    handleTriggerMockAlert({
+      id: `pres_flameout_${Date.now()}_1`,
+      message: "ENG 1 FLAMEOUT",
+      description: "Engine 1 combustion lost. Core RPM (N2) falling below idle.",
+      priority: "critical",
+      action: "SHUTDOWN ENG 1 / START APU"
+    });
+
+    setTimeout(() => {
+      handleTriggerMockAlert({
+        id: `pres_flameout_${Date.now()}_2`,
+        message: "HYD Y SYST FAULT",
+        description: "Yellow Hydraulic System pressure low. Engine 1 pump loss.",
+        priority: "high",
+        action: "ENGAGE ELEC POWER PACK"
+      });
+    }, 400);
+
+    setTimeout(() => {
+      handleTriggerMockAlert({
+        id: `pres_flameout_${Date.now()}_3`,
+        message: "GEN 1 OFF LINE",
+        description: "Generator 1 disconnected. Main AC Bus tie closed automatically.",
+        priority: "low",
+        action: "MONITOR GALLEY SHEDDING"
+      });
+    }, 800);
+  };
+
+  // Instructor Remote Sync Listener
+  useEffect(() => {
+    const handleStorageEvent = (e) => {
+      if (e.key === 'cogsync_control_sync') {
+        try {
+          const syncData = JSON.parse(e.newValue);
+          if (!syncData) return;
+
+          if (syncData.type === 'telemetry') {
+            setIsSimulating(true);
+            if (syncData.value.isSimulating !== undefined) {
+              setIsSimulating(syncData.value.isSimulating);
+            }
+            updateSimValues(syncData.value);
+          } else if (syncData.type === 'inject_alert') {
+            setIsSimulating(true);
+            handleTriggerMockAlert(syncData.value);
+          } else if (syncData.type === 'scenario') {
+            setIsSimulating(true);
+            if (syncData.value === 'wind_shear') {
+              triggerWindShear();
+            } else if (syncData.value === 'hypoxia') {
+              triggerHypoxia();
+            } else if (syncData.value === 'flameout') {
+              triggerEngineFlameout();
+            }
+          } else if (syncData.type === 'clear_alerts') {
+            setAlerts([]);
+          }
+        } catch (err) {
+          console.error("Failed to parse instructor sync data:", err);
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageEvent);
+    return () => window.removeEventListener('storage', handleStorageEvent);
+  }, []);
+
+  // Cleanup scenario intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (scenarioIntervalRef.current) {
+        clearInterval(scenarioIntervalRef.current);
+      }
+    };
+  }, []);
+
   const activeStateClass = telemetry.detected ? `state-${telemetry.state}` : '';
+
+  // Render Instructor Dashboard directly if requested
+  if (currentView === 'control') {
+    return (
+      <InstructorControl 
+        simState={simState}
+        onSimStateChange={setSimState}
+        onTriggerMockAlert={handleTriggerMockAlert}
+        onTriggerWindShear={triggerWindShear}
+        onTriggerHypoxia={triggerHypoxia}
+        onTriggerEngineFlameout={triggerEngineFlameout}
+        alerts={alerts}
+        setAlerts={setAlerts}
+        isSimulating={isSimulating}
+        setIsSimulating={setIsSimulating}
+      />
+    );
+  }
 
   return (
     <div className={`app-container theme-${industry} ${activeStateClass} lvl-${attentionLevel}`}>
@@ -421,6 +679,9 @@ export default function App() {
               simState={simState}
               onSimStateChange={setSimState}
               onTriggerMockAlert={handleTriggerMockAlert}
+              onTriggerWindShear={triggerWindShear}
+              onTriggerHypoxia={triggerHypoxia}
+              onTriggerEngineFlameout={triggerEngineFlameout}
               industry={industry}
             />
           </div>

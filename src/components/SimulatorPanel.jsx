@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React from 'react';
 import { Sliders, ToggleLeft, ToggleRight, Radio, Compass, UserCheck } from 'lucide-react';
 
 export default function SimulatorPanel({ 
@@ -7,26 +7,11 @@ export default function SimulatorPanel({
   simState, 
   onSimStateChange, 
   onTriggerMockAlert,
+  onTriggerWindShear,
+  onTriggerHypoxia,
+  onTriggerEngineFlameout,
   industry 
 }) {
-  const scenarioIntervalRef = useRef(null);
-
-  // Clear running scenario interval on unmount
-  useEffect(() => {
-    return () => {
-      if (scenarioIntervalRef.current) {
-        clearInterval(scenarioIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // Clear running scenario interval if simulation is toggled off
-  useEffect(() => {
-    if (!isSimulating && scenarioIntervalRef.current) {
-      clearInterval(scenarioIntervalRef.current);
-      scenarioIntervalRef.current = null;
-    }
-  }, [isSimulating]);
 
   // Unified state updates + dynamic Endsley situational awareness calculations
   const updateSimValues = (updates) => {
@@ -55,157 +40,6 @@ export default function SimulatorPanel({
     nextState.endsleyL3 = l3;
 
     onSimStateChange(nextState);
-  };
-
-  // SCENARIO 1: Wind Shear
-  const triggerWindShear = () => {
-    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
-    
-    onTriggerMockAlert({
-      id: `pres_windshear_${Date.now()}`,
-      message: "WIND SHEAR AHEAD",
-      description: "Severe wind shear detected by predictive radar. Escape flight path active.",
-      priority: "critical",
-      action: "MAX THROTTLE / TOGA DETENT"
-    });
-
-    let count = 0;
-    const interval = setInterval(() => {
-      count++;
-      // Oscillating turbulence
-      const cycle = count % 4;
-      let pitchVal = 12;
-      let rollVal = -15;
-      let yawVal = 8;
-      
-      if (cycle === 1) {
-        pitchVal = 16;
-        rollVal = 20;
-        yawVal = -10;
-      } else if (cycle === 2) {
-        pitchVal = 8;
-        rollVal = -25;
-        yawVal = 5;
-      } else if (cycle === 3) {
-        pitchVal = 14;
-        rollVal = 12;
-        yawVal = -4;
-      }
-
-      updateSimValues({
-        scenario: 'wind_shear',
-        pitch: pitchVal,
-        roll: rollVal,
-        yaw: yawVal,
-        gForce: parseFloat((2.0 + Math.random() * 1.5).toFixed(1)),
-        attentionScore: 85,
-        cognitiveSaturation: 75,
-        pupilDilation: 4.5
-      });
-
-      if (count >= 15) { // Run for 7.5 seconds
-        clearInterval(interval);
-        updateSimValues({ scenario: 'nominal', gForce: 1.0 });
-      }
-    }, 500);
-    scenarioIntervalRef.current = interval;
-  };
-
-  // SCENARIO 2: Hypoxia (forces attention score drop to Level 4 over time)
-  const triggerHypoxia = () => {
-    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
-
-    onTriggerMockAlert({
-      id: `pres_hypoxia_warn_${Date.now()}`,
-      message: "CABIN PRESSURE WARNING",
-      description: "Cabin altitude exceeds 14,000 FT. Potential slow decompression detected.",
-      priority: "high",
-      action: "DON OXYGEN MASK"
-    });
-
-    let currentScore = simState.attentionScore;
-    let currentPupil = simState.pupilDilation;
-    let currentSaturation = simState.cognitiveSaturation;
-    let currentEar = simState.ear;
-    let criticalAlertTriggered = false;
-
-    const interval = setInterval(() => {
-      currentScore = Math.max(8, currentScore - 6);
-      currentPupil = Math.min(8.0, currentPupil + 0.35);
-      currentSaturation = Math.min(100, currentSaturation + 6);
-      currentEar = Math.max(0.03, currentEar - 0.02);
-
-      updateSimValues({
-        scenario: 'hypoxia',
-        attentionScore: currentScore,
-        pupilDilation: parseFloat(currentPupil.toFixed(2)),
-        cognitiveSaturation: parseFloat(currentSaturation.toFixed(1)),
-        ear: parseFloat(currentEar.toFixed(3)),
-        isBlinking: currentScore < 50 ? (Math.random() > 0.3) : false,
-        yaw: Math.round(simState.yaw + (Math.random() - 0.5) * 4),
-        pitch: Math.max(-25, Math.round(simState.pitch - 1)) // Head drooping forward
-      });
-
-      if (currentScore <= 28 && !criticalAlertTriggered) {
-        criticalAlertTriggered = true;
-        onTriggerMockAlert({
-          id: `pres_hypoxia_crit_${Date.now()}`,
-          message: "PILOT HYPOXIA HAZARD",
-          description: "Operator responsiveness critical. Initiating cockpit interface simplification.",
-          priority: "critical",
-          action: "ESTABLISH PILOT INTERACTION OR CO-PILOT HANDOFF"
-        });
-      }
-
-      if (currentScore <= 8) {
-        clearInterval(interval);
-      }
-    }, 800);
-    scenarioIntervalRef.current = interval;
-  };
-
-  // SCENARIO 3: Engine Flameout (triggers critical alert queue)
-  const triggerEngineFlameout = () => {
-    if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
-
-    updateSimValues({
-      scenario: 'flameout',
-      attentionScore: 92,
-      cognitiveSaturation: 82,
-      pupilDilation: 5.5,
-      yaw: 0,
-      pitch: -2,
-      gForce: 1.0
-    });
-
-    // Cascade of alerts
-    onTriggerMockAlert({
-      id: `pres_flameout_${Date.now()}_1`,
-      message: "ENG 1 FLAMEOUT",
-      description: "Engine 1 combustion lost. Core RPM (N2) falling below idle.",
-      priority: "critical",
-      action: "SHUTDOWN ENG 1 / START APU"
-    });
-
-    setTimeout(() => {
-      onTriggerMockAlert({
-        id: `pres_flameout_${Date.now()}_2`,
-        message: "HYD Y SYST FAULT",
-        description: "Yellow Hydraulic System pressure low. Engine 1 pump loss.",
-        priority: "high",
-        action: "ENGAGE ELEC POWER PACK"
-      });
-    }, 400);
-
-    setTimeout(() => {
-      onTriggerMockAlert({
-        id: `pres_flameout_${Date.now()}_3`,
-        message: "GEN 1 OFF LINE",
-        description: "Generator 1 disconnected. Main AC Bus tie closed automatically.",
-        priority: "low",
-        action: "MONITOR GALLEY SHEDDING"
-      });
-    }, 800);
   };
 
   // Custom mock alerts based on selected industry
@@ -379,7 +213,7 @@ export default function SimulatorPanel({
         </span>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem', marginBottom: '0.8rem' }}>
           <button
-            onClick={triggerWindShear}
+            onClick={onTriggerWindShear}
             style={{
               background: 'rgba(0, 240, 255, 0.05)', border: '1px solid rgba(0, 240, 255, 0.15)',
               color: 'var(--hud-accent)', padding: '0.5rem 0.4rem', borderRadius: '6px', fontSize: '0.7rem',
@@ -396,7 +230,7 @@ export default function SimulatorPanel({
             Wind Shear
           </button>
           <button
-            onClick={triggerHypoxia}
+            onClick={onTriggerHypoxia}
             style={{
               background: 'rgba(213, 0, 249, 0.05)', border: '1px solid rgba(213, 0, 249, 0.15)',
               color: 'var(--color-fatigued)', padding: '0.5rem 0.4rem', borderRadius: '6px', fontSize: '0.7rem',
@@ -413,7 +247,7 @@ export default function SimulatorPanel({
             Hypoxia
           </button>
           <button
-            onClick={triggerEngineFlameout}
+            onClick={onTriggerEngineFlameout}
             style={{
               background: 'rgba(255, 23, 68, 0.05)', border: '1px solid rgba(255, 23, 68, 0.15)',
               color: 'var(--color-distracted)', padding: '0.5rem 0.4rem', borderRadius: '6px', fontSize: '0.7rem',
