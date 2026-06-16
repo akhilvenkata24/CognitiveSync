@@ -203,12 +203,12 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     const leftCenter = { x: (eyeLOuter.x + eyeLInner.x) / 2, y: (eyeLOuter.y + eyeLInner.y) / 2 };
     const rightCenter = { x: (eyeROuter.x + eyeRInner.x) / 2, y: (eyeROuter.y + eyeRInner.y) / 2 };
 
-    const gazeXL = (irisL.x - leftCenter.x) * 450;
-    const gazeYL = (irisL.y - leftCenter.y) * 450;
-    const gazeXR = (irisR.x - rightCenter.x) * 450;
-    const gazeYR = (irisR.y - rightCenter.y) * 450;
+    const gazeXL = (irisL.x - leftCenter.x) * 1600;
+    const gazeYL = (irisL.y - leftCenter.y) * 1600;
+    const gazeXR = (irisR.x - rightCenter.x) * 1600;
+    const gazeYR = (irisR.y - rightCenter.y) * 1600;
 
-    const gazeX = (gazeXL + gazeXR) / 2;
+    const gazeX = -((gazeXL + gazeXR) / 2);
     const gazeY = (gazeYL + gazeYR) / 2;
 
     // ==========================================

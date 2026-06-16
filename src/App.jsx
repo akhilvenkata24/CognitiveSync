@@ -6,6 +6,7 @@ import AlertPanel from './components/AlertPanel';
 import SimulatorPanel from './components/SimulatorPanel';
 import DigitalTwinDashboard from './components/DigitalTwinDashboard';
 import InstructorControl from './components/InstructorControl';
+import AerospaceCockpit from './components/industry/AerospaceCockpit';
 import { startAlarm, stopAlarm, playBeep } from './audio';
 
 // Default presets for alerts on load to showcase adaptive overlay
@@ -53,7 +54,7 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [systemTime, setSystemTime] = useState('');
   const lastPostTimeRef = useRef(0);
-  
+
   // Real-time telemetry (merged from Camera or Simulator)
   const [telemetry, setTelemetry] = useState({
     detected: true,
@@ -213,12 +214,12 @@ export default function App() {
       // Calculate dynamic cognitive stats on the fly from camera variables
       const CS = Math.min(100, Math.max(0, 100 - newTelemetry.attentionScore + (newTelemetry.isBlinking ? 20 : 0)));
       const PD = 3.0 + (CS / 100) * 4.0; // Dilate pupil as cognitive load grows
-      
+
       // Endsley Levels computation
       const l1 = Math.round(newTelemetry.attentionScore); // Perception correlates to raw attention
       const l2 = Math.round(newTelemetry.detected ? Math.max(0, newTelemetry.attentionScore * 0.95 - Math.abs(newTelemetry.yaw) * 0.5) : 0); // Comprehension drops if head yaw is high
       const l3 = Math.round(newTelemetry.detected ? Math.max(0, l2 * 0.98 - Math.abs(newTelemetry.pitch) * 0.5) : 0); // Projection drops if head pitch is high
-      
+
       setTelemetry({
         ...newTelemetry,
         gForce: 1.0, // Camera operates under 1G standard
@@ -284,7 +285,7 @@ export default function App() {
   // Handle alert acknowledgement
   const handleAcknowledgeAlert = (alertId) => {
     playBeep(600, 0.1, 'sine', 0.15); // Confirmation sound
-    
+
     if (alertId === null) {
       // Manual reset of generic distraction overlay
       if (isSimulating) {
@@ -360,7 +361,7 @@ export default function App() {
   const updateSimValues = (updates) => {
     setSimState(prev => {
       const nextState = { ...prev, ...updates };
-      
+
       if (updates.attentionScore !== undefined) {
         const score = updates.attentionScore;
         if (score < 30) nextState.state = 'fatigued';
@@ -373,7 +374,7 @@ export default function App() {
       const baseScore = nextState.attentionScore ?? 100;
       const sat = nextState.cognitiveSaturation ?? 12;
       const satFactor = (100 - sat) / 100;
-      
+
       nextState.endsleyL1 = Math.round(Math.max(0, baseScore * (0.3 + 0.7 * satFactor)));
       nextState.endsleyL2 = Math.round(Math.max(0, nextState.endsleyL1 * 0.95 - Math.abs(nextState.yaw ?? 0) * 0.5));
       nextState.endsleyL3 = Math.round(Math.max(0, nextState.endsleyL2 * 0.90 - Math.abs(nextState.pitch ?? 0) * 0.5 - ((nextState.gForce ?? 1.0) - 1.0) * 8));
@@ -385,7 +386,7 @@ export default function App() {
   // Scenario 1: Wind Shear
   const triggerWindShear = () => {
     if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
-    
+
     handleTriggerMockAlert({
       id: `pres_windshear_${Date.now()}`,
       message: "WIND SHEAR AHEAD",
@@ -401,7 +402,7 @@ export default function App() {
       let pitchVal = 12;
       let rollVal = -15;
       let yawVal = 8;
-      
+
       if (cycle === 1) {
         pitchVal = 16;
         rollVal = 20;
@@ -583,7 +584,7 @@ export default function App() {
   // Render Instructor Dashboard directly if requested
   if (currentView === 'control') {
     return (
-      <InstructorControl 
+      <InstructorControl
         simState={simState}
         onSimStateChange={setSimState}
         onTriggerMockAlert={handleTriggerMockAlert}
@@ -623,14 +624,14 @@ export default function App() {
 
         {/* Console View Mode Switcher */}
         <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', alignItems: 'center' }}>
-          <button 
+          <button
             className={`industry-tab ${currentView === 'cockpit' ? 'active' : ''}`}
             onClick={() => navigateToView('cockpit')}
             style={{ fontSize: '0.7rem', padding: '0.35rem 0.8rem' }}
           >
             Tactical HUD
           </button>
-          <button 
+          <button
             className={`industry-tab ${currentView === 'twin' ? 'active' : ''}`}
             onClick={() => navigateToView('twin')}
             style={{ fontSize: '0.7rem', padding: '0.35rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
@@ -652,8 +653,8 @@ export default function App() {
                 setVisorGazeLock(!visorGazeLock);
               }}
               className={`industry-tab ${visorGazeLock ? 'active' : ''}`}
-              style={{ 
-                fontSize: '0.65rem', 
+              style={{
+                fontSize: '0.65rem',
                 padding: '0.25rem 0.6rem',
                 borderColor: visorGazeLock ? 'var(--hud-accent)' : 'rgba(255,255,255,0.08)',
                 background: visorGazeLock ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255,255,255,0.02)',
@@ -686,19 +687,19 @@ export default function App() {
 
       {/* 2. Main Content Area */}
       {currentView === 'twin' ? (
-        <DigitalTwinDashboard 
+        <DigitalTwinDashboard
           activeSessionId={activeSessionId}
           isBackendConnected={isBackendConnected}
         />
       ) : (
         <main style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: '340px 1fr',
           gap: '1rem',
           alignItems: 'stretch',
           overflow: 'hidden'
         }}>
-          {/* Left Hand Column (CV Video Tracker + Controls) */}
+          {/* Left Hand Column (CV Video Tracker + Controls + Visor Indicator) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}>
             <WebcamTracker 
               onTelemetryUpdate={handleCameraTelemetry} 
@@ -717,13 +718,6 @@ export default function App() {
               onTriggerEngineFlameout={triggerEngineFlameout}
               industry={industry}
             />
-          </div>
-
-          {/* Right Hand Column (Telemetry gauges + Active alerts list) */}
-          <div 
-            style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}
-            className={attentionLevel === 3 ? 'level3-bg-blur' : ''}
-          >
             <AlertPanel 
               alerts={alerts}
               operatorState={telemetry.state}
@@ -735,10 +729,17 @@ export default function App() {
               visorGazeLock={visorGazeLock}
               setVisorGazeLock={setVisorGazeLock}
             />
-            <TelemetryPanel 
+          </div>
+
+          {/* Right Hand Column (4 Cockpit Screens in a 2x2 grid) */}
+          <div 
+            style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}
+            className={attentionLevel === 3 ? 'level3-bg-blur' : ''}
+          >
+            <AerospaceCockpit 
               telemetry={telemetry}
-              industry={industry}
               attentionLevel={attentionLevel}
+              alerts={alerts}
             />
           </div>
         </main>

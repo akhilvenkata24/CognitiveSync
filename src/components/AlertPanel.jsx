@@ -33,6 +33,7 @@ export default function AlertPanel({
   });
 
   const topAlert = sortedAlerts[0];
+  const otherAlerts = sortedAlerts.slice(1);
 
   // Progressive Adaptation Levels:
   // Level 3: Blur background and overlay warnings
@@ -73,31 +74,69 @@ export default function AlertPanel({
           </div>
         </div>
       ) : visorGazeLock ? (
-        <div className="panel-card" style={{ flex: '0 0 auto', border: '1px dashed var(--hud-accent)', background: 'rgba(0, 240, 255, 0.02)', padding: '1rem' }}>
-          <div className="panel-title" style={{ color: 'var(--hud-accent)', textShadow: 'var(--hud-accent-glow)', borderBottomColor: 'rgba(0, 240, 255, 0.15)' }}>
-            <Eye size={14} /> Helmet Visor HUD Active
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.2rem 0' }}>
-            <div style={{ position: 'relative', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', border: '2px solid var(--hud-accent)', animation: 'ping 1.5s infinite' }} />
-              <Eye size={12} style={{ color: 'var(--hud-accent)' }} />
+        <div className="panel-card" style={{ flex: '0 0 auto', border: '1px dashed var(--hud-accent)', background: 'rgba(0, 240, 255, 0.02)', padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+          <div>
+            <div className="panel-title" style={{ color: 'var(--hud-accent)', textShadow: 'var(--hud-accent-glow)', borderBottomColor: 'rgba(0, 240, 255, 0.15)' }}>
+              <Eye size={14} /> Helmet Visor HUD Active
             </div>
-            <div>
-              <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-hud)', fontWeight: 'bold', color: '#fff', display: 'block' }}>
-                PROJECTED TO VISOR HMD
-              </span>
-              <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>
-                Warnings following pilot look vector {gazeX > 0 ? `+${gazeX}°` : `${gazeX}°`} / {gazeY > 0 ? `+${gazeY}°` : `${gazeY}°`}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.2rem 0', marginTop: '0.4rem' }}>
+              <div style={{ position: 'relative', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', border: '2px solid var(--hud-accent)', animation: 'ping 1.5s infinite' }} />
+                <Eye size={12} style={{ color: 'var(--hud-accent)' }} />
+              </div>
+              <div>
+                <span style={{ fontSize: '0.72rem', fontFamily: 'var(--font-hud)', fontWeight: 'bold', color: '#fff', display: 'block' }}>
+                  EYE-GAZE TRACKING LOCKED
+                </span>
+                <span style={{ fontSize: '0.58rem', color: 'var(--text-secondary)' }}>
+                  Gaze: {gazeX > 0 ? `+${gazeX.toFixed(1)}°` : `${gazeX.toFixed(1)}°`}x / {gazeY > 0 ? `+${gazeY.toFixed(1)}°` : `${gazeY.toFixed(1)}°`}y
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.6rem' }}>
+            <span style={{ fontSize: '0.55rem', color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: '0.3rem' }}>Visor Projected Alarms:</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'rgba(255,23,68,0.08)', padding: '0.35rem 0.5rem', borderRadius: '4px', borderLeft: '3px solid var(--color-distracted)' }}>
+              <AlertOctagon size={11} style={{ color: 'var(--color-distracted)', animation: 'blink 0.8s infinite' }} />
+              <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-hud)', fontWeight: 'bold', color: '#fff' }}>
+                [GAZE LOCK] {topAlert.message}
               </span>
             </div>
           </div>
+
+          {otherAlerts.length > 0 && (
+            <div style={{ borderTop: '1px dashed rgba(255,255,255,0.06)', paddingTop: '0.6rem' }}>
+              <span style={{ fontSize: '0.55rem', color: 'var(--text-secondary)', textTransform: 'uppercase', display: 'block', marginBottom: '0.3rem' }}>Secondary Sidebar Alarms:</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {otherAlerts.map(alert => {
+                  const isHigh = alert.priority === 'high';
+                  const tColor = isHigh ? 'var(--color-normal)' : 'var(--hud-accent)';
+                  return (
+                    <div key={alert.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.25)', padding: '0.3rem 0.5rem', borderRadius: '4px', borderLeft: `3px solid ${tColor}` }}>
+                      <div>
+                        <span style={{ fontSize: '0.62rem', fontWeight: 'bold', color: '#fff', display: 'block' }}>{alert.message}</span>
+                        <span style={{ fontSize: '0.52rem', color: 'var(--text-secondary)' }}>{alert.description.substring(0, 42)}...</span>
+                      </div>
+                      <button 
+                        onClick={() => onAcknowledgeAlert(alert.id)}
+                        style={{ fontSize: '0.5rem', padding: '0.1rem 0.3rem', background: 'rgba(255,255,255,0.03)', color: '#fff', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '3px', cursor: 'pointer' }}
+                      >
+                        ACK
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => setVisorGazeLock(false)}
             style={{
-              marginTop: '0.5rem',
               padding: '0.3rem 0.6rem',
               fontSize: '0.65rem',
-              background: 'rgba(255,255,255,0.03)',
+              background: 'rgba(255,255,255,0.02)',
               color: 'var(--hud-accent)',
               border: '1px solid var(--hud-accent)',
               borderRadius: '4px',
@@ -105,14 +144,15 @@ export default function AlertPanel({
               fontFamily: 'var(--font-hud)',
               fontWeight: 'bold',
               transition: 'all 0.2s',
-              alignSelf: 'flex-start'
+              alignSelf: 'flex-start',
+              marginTop: '0.2rem'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--hud-accent)';
               e.currentTarget.style.color = '#000';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
+              e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
               e.currentTarget.style.color = 'var(--hud-accent)';
             }}
           >
@@ -233,22 +273,22 @@ export default function AlertPanel({
         })
       )}
 
-      {/* Floating HMD Visor HUD Overlay */}
-      {visorGazeLock && sortedAlerts.length > 0 && (
+      {/* Floating HMD Visor HUD Overlay (locks only the topAlert at the center gaze focus) */}
+      {visorGazeLock && topAlert && (
         <div style={{
           position: 'fixed',
-          right: '2.5rem',
-          top: '9rem',
+          left: 'calc(340px + (100vw - 340px) / 2)',
+          top: '50%',
           width: '380px',
-          zIndex: 9995,
+          zIndex: 9999,
           display: 'flex',
-          flexDirection: 'column',
-          gap: '1rem',
+          justifyContent: 'center',
+          alignItems: 'center',
           pointerEvents: 'none'
         }}>
-          {sortedAlerts.map((alert, index) => {
-            const isCritical = alert.priority === 'critical';
-            const isHigh = alert.priority === 'high';
+          {(() => {
+            const isCritical = topAlert.priority === 'critical';
+            const isHigh = topAlert.priority === 'high';
             const themeColor = isCritical 
               ? 'var(--color-distracted)' 
               : (isHigh ? 'var(--color-normal)' : 'var(--hud-accent)');
@@ -256,116 +296,152 @@ export default function AlertPanel({
               ? 'var(--glow-distracted)' 
               : (isHigh ? 'var(--glow-normal)' : 'var(--hud-accent-glow)');
 
-            // Map gaze positions (-30 to +30) to smooth offsets
-            // Limit offsets so they don't drift completely off-screen
-            const maxOffset = 220;
-            const targetOffsetX = Math.max(-maxOffset, Math.min(maxOffset, (gazeX || 0) * 12));
-            const targetOffsetY = Math.max(-maxOffset, Math.min(maxOffset, -(gazeY || 0) * 10));
+            // Calibrate multiplier for full right-screen coverage
+            const targetOffsetX = (gazeX || 0) * 18;
+            const targetOffsetY = (gazeY || 0) * 14;
 
             return (
-              <div 
-                key={alert.id}
-                className={`panel-card priority-${alert.priority}`}
-                style={{
-                  pointerEvents: 'auto',
-                  borderColor: themeColor,
-                  borderLeft: `5px solid ${themeColor}`,
-                  boxShadow: `0 12px 40px rgba(0, 0, 0, 0.7), ${glowGlow}`,
-                  transform: `translate3d(${targetOffsetX}px, ${targetOffsetY}px, 0px) rotateY(${(gazeX || 0) * 0.35}deg) rotateX(${-(gazeY || 0) * 0.35}deg)`,
-                  transition: 'transform 0.22s cubic-bezier(0.1, 0.8, 0.25, 1)',
-                  padding: '1rem',
-                  background: 'rgba(5, 8, 20, 0.92)',
-                  backdropFilter: 'blur(15px)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-hud)', fontSize: '0.72rem', fontWeight: 'bold', color: themeColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {isCritical ? (
-                      <AlertOctagon size={13} style={{ animation: 'blink 0.8s infinite' }} />
-                    ) : (
-                      <AlertTriangle size={13} />
-                    )}
-                    <span>{alert.priority} VISOR HUD WARNING</span>
-                  </div>
-                  <button
-                    onClick={() => onAcknowledgeAlert(alert.id)}
-                    style={{
-                      padding: '0.2rem 0.5rem',
-                      fontSize: '0.55rem',
-                      background: 'rgba(255, 255, 255, 0.03)',
-                      color: '#fff',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-hud)',
-                      fontWeight: 'bold',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = themeColor;
-                      e.currentTarget.style.color = '#000';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                      e.currentTarget.style.color = '#fff';
-                    }}
-                  >
-                    ACK FAULT
-                  </button>
-                </div>
+              <div style={{
+                position: 'relative',
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                transform: `translate3d(${targetOffsetX}px, ${targetOffsetY}px, 0px) rotateY(${(gazeX || 0) * 0.35}deg) rotateX(${-(gazeY || 0) * 0.35}deg)`,
+                transition: 'transform 0.2s cubic-bezier(0.1, 0.8, 0.25, 1)',
+                pointerEvents: 'none'
+              }}>
+                {/* Glowing Eye Lock Crosshair Reticle behind the alert */}
+                <div style={{
+                  position: 'absolute',
+                  width: '110px',
+                  height: '110px',
+                  border: '1.2px dashed var(--hud-accent)',
+                  borderRadius: '50%',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                  animation: 'radar-spin 8s linear infinite',
+                  opacity: 0.55,
+                  boxShadow: '0 0 15px rgba(0, 240, 255, 0.15) inset'
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  width: '8px',
+                  height: '8px',
+                  background: 'var(--hud-accent)',
+                  borderRadius: '50%',
+                  pointerEvents: 'none',
+                  zIndex: -1,
+                  boxShadow: 'var(--hud-accent-glow)',
+                  animation: 'blink 0.5s infinite'
+                }} />
+                <div style={{ position: 'absolute', width: '150px', height: '1px', background: 'rgba(0, 240, 255, 0.25)', pointerEvents: 'none', zIndex: -1 }} />
+                <div style={{ position: 'absolute', width: '1px', height: '150px', background: 'rgba(0, 240, 255, 0.25)', pointerEvents: 'none', zIndex: -1 }} />
 
-                <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '0.3rem' }}>
-                  {alert.message.includes("TCAS") && (
-                    <div style={{
-                      position: 'relative', width: '70px', height: '70px', borderRadius: '50%',
-                      border: '1px solid rgba(0, 240, 255, 0.25)', flexShrink: 0, background: '#02040c',
-                      overflow: 'hidden', boxShadow: '0 0 10px rgba(0, 240, 255, 0.1) inset'
-                    }}>
-                      <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                        background: 'conic-gradient(from 0deg, rgba(0, 240, 255, 0.2) 0deg, transparent 120deg)',
-                        animation: 'radar-spin 2.5s linear infinite', borderRadius: '50%'
-                      }} />
-                      <div style={{ position: 'absolute', top: '15px', left: '15px', right: '15px', bottom: '15px', borderRadius: '50%', border: '1px dashed rgba(0, 240, 255, 0.12)' }} />
-                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--hud-accent)' }}>
-                        <Plane size={12} style={{ transform: 'rotate(-45deg)' }} />
-                      </div>
-                      <div style={{
-                        position: 'absolute', top: '15%', left: '35%', width: '6px', height: '6px',
-                        borderRadius: '50%', background: '#ff1744', boxShadow: '0 0 8px #ff1744',
-                        animation: 'blink 0.8s infinite'
-                      }} />
-                      <div style={{
-                        position: 'absolute', bottom: '20%', left: '20%', width: '5px', height: '5px',
-                        borderRadius: '50%', background: '#ffc107', boxShadow: '0 0 6px #ffc107'
-                      }} />
+                {/* Floating Warning Card */}
+                <div 
+                  className={`panel-card priority-${topAlert.priority}`}
+                  style={{
+                    pointerEvents: 'auto',
+                    borderColor: themeColor,
+                    borderLeft: `5px solid ${themeColor}`,
+                    boxShadow: `0 15px 45px rgba(0, 0, 0, 0.8), ${glowGlow}`,
+                    padding: '1.1rem',
+                    background: 'rgba(3, 5, 12, 0.94)',
+                    backdropFilter: 'blur(15px)',
+                    width: '380px',
+                    margin: 0
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.4rem', marginBottom: '0.4rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontFamily: 'var(--font-hud)', fontSize: '0.72rem', fontWeight: 'bold', color: themeColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      {isCritical ? (
+                        <AlertOctagon size={13} style={{ animation: 'blink 0.8s infinite' }} />
+                      ) : (
+                        <AlertTriangle size={13} />
+                      )}
+                      <span>{topAlert.priority} GAZE LOCK ALERT</span>
                     </div>
-                  )}
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
-                    <h3 style={{ fontSize: '0.82rem', fontWeight: '900', fontFamily: 'var(--font-hud)', color: '#fff', margin: 0, letterSpacing: '0.04em' }}>
-                      {alert.message}
-                    </h3>
-                    <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.3' }}>
-                      {alert.description}
-                    </p>
-                    <div style={{ 
-                      marginTop: '0.2rem', 
-                      background: 'rgba(0,0,0,0.3)', 
-                      padding: '0.3rem 0.5rem', 
-                      borderRadius: '4px', 
-                      border: `1px dashed ${themeColor}`,
-                      fontSize: '0.6rem',
-                      fontFamily: 'var(--font-hud)',
-                      color: themeColor
-                    }}>
-                      <strong style={{ color: '#fff', marginRight: '0.2rem' }}>DIRECTIVE:</strong> {alert.action || 'MONITOR AVIONICS BUS'}
+                    <button
+                      onClick={() => onAcknowledgeAlert(topAlert.id)}
+                      style={{
+                        padding: '0.2rem 0.5rem',
+                        fontSize: '0.55rem',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        color: '#fff',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-hud)',
+                        fontWeight: 'bold',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = themeColor;
+                        e.currentTarget.style.color = '#000';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                    >
+                      ACK FAULT
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.8rem', alignItems: 'center', marginTop: '0.3rem' }}>
+                    {topAlert.message.includes("TCAS") && (
+                      <div style={{
+                        position: 'relative', width: '70px', height: '70px', borderRadius: '50%',
+                        border: '1px solid rgba(0, 240, 255, 0.25)', flexShrink: 0, background: '#02040c',
+                        overflow: 'hidden', boxShadow: '0 0 10px rgba(0, 240, 255, 0.1) inset'
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                          background: 'conic-gradient(from 0deg, rgba(0, 240, 255, 0.2) 0deg, transparent 120deg)',
+                          animation: 'radar-spin 2.5s linear infinite', borderRadius: '50%'
+                        }} />
+                        <div style={{ position: 'absolute', top: '15px', left: '15px', right: '15px', bottom: '15px', borderRadius: '50%', border: '1px dashed rgba(0, 240, 255, 0.12)' }} />
+                        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'var(--hud-accent)' }}>
+                          <Plane size={12} style={{ transform: 'rotate(-45deg)' }} />
+                        </div>
+                        <div style={{
+                          position: 'absolute', top: '15%', left: '35%', width: '6px', height: '6px',
+                          borderRadius: '50%', background: '#ff1744', boxShadow: '0 0 8px #ff1744',
+                          animation: 'blink 0.8s infinite'
+                        }} />
+                        <div style={{
+                          position: 'absolute', bottom: '20%', left: '20%', width: '5px', height: '5px',
+                          borderRadius: '50%', background: '#ffc107', boxShadow: '0 0 6px #ffc107'
+                        }} />
+                      </div>
+                    )}
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', flex: 1 }}>
+                      <h3 style={{ fontSize: '0.82rem', fontWeight: '900', fontFamily: 'var(--font-hud)', color: '#fff', margin: 0, letterSpacing: '0.04em' }}>
+                        {topAlert.message}
+                      </h3>
+                      <p style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.3' }}>
+                        {topAlert.description}
+                      </p>
+                      <div style={{ 
+                        marginTop: '0.2rem', 
+                        background: 'rgba(0,0,0,0.3)', 
+                        padding: '0.3rem 0.5rem', 
+                        borderRadius: '4px', 
+                        border: `1px dashed ${themeColor}`,
+                        fontSize: '0.6rem',
+                        fontFamily: 'var(--font-hud)',
+                        color: themeColor
+                      }}>
+                        <strong style={{ color: '#fff', marginRight: '0.2rem' }}>DIRECTIVE:</strong> {topAlert.action || 'MONITOR AVIONICS BUS'}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
       )}
 
