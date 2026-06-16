@@ -362,15 +362,16 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
         <CameraIcon size={16} /> Operator Tracking HUD
       </div>
       
-      {/* Centered Circular HUD Scanner Wrapper */}
-      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0.5rem 0' }}>
+      {/* Organized Rectangular HUD Scanner Wrapper */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0.3rem 0' }}>
         <div style={{ 
           position: 'relative', 
-          width: '180px', 
-          height: '180px', 
-          borderRadius: '50%', 
+          width: '100%', 
+          aspectRatio: '4 / 3',
+          maxHeight: '220px',
+          borderRadius: '6px', 
           overflow: 'hidden', 
-          border: '2px solid var(--hud-accent)', 
+          border: '1px solid var(--hud-accent)', 
           boxShadow: 'var(--hud-accent-glow)',
           background: '#010206'
         }}>
@@ -379,12 +380,12 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
             className="webcam-video" 
             muted 
             playsInline
-            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', transform: 'scaleX(-1)' }}
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
           />
           <canvas 
             ref={canvasRef} 
             className="webcam-canvas" 
-            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, borderRadius: '50%', transform: 'scaleX(-1)' }}
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, transform: 'scaleX(-1)' }}
           />
 
           {!trackingActive && !errorMsg && (
@@ -394,7 +395,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
               background: 'rgba(5, 7, 15, 0.9)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center'
             }}>
               <div style={{
-                width: '40px', height: '40px', borderRadius: '50%', background: 'var(--hud-bg-glow)',
+                width: '40px', height: '40px', borderRadius: '4px', background: 'var(--hud-bg-glow)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hud-accent)',
                 border: '1px solid var(--hud-accent)'
               }}>

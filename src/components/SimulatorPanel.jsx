@@ -76,40 +76,6 @@ export default function SimulatorPanel({
 
       {/* 2. Simulator State Inputs */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        <div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>
-            Forced State Selection:
-          </span>
-          <div className="sim-controls-grid">
-            <button 
-              className={`sim-button ${simState.state === 'focused' ? 'active' : ''}`}
-              onClick={() => updateSimValues({ state: 'focused', attentionScore: 95, yaw: 2, pitch: 1, ear: 0.28, isBlinking: false, gForce: 1.0, pupilDilation: 3.2, cognitiveSaturation: 12.0 })}
-            >
-              <UserCheck size={14} /> Focused
-            </button>
-            <button 
-              className={`sim-button ${simState.state === 'normal' ? 'active' : ''}`}
-              onClick={() => updateSimValues({ state: 'normal', attentionScore: 65, yaw: -8, pitch: 4, ear: 0.22, isBlinking: false, gForce: 1.2, pupilDilation: 3.8, cognitiveSaturation: 35.0 })}
-            >
-              <Radio size={14} /> Normal
-            </button>
-            <button 
-              className={`sim-button ${simState.state === 'distracted' ? 'active' : ''}`}
-              style={simState.state === 'distracted' ? { background: 'var(--color-distracted)', color: '#fff', borderColor: 'var(--color-distracted)', boxShadow: '0 0 10px rgba(255,23,68,0.3)' } : {}}
-              onClick={() => updateSimValues({ state: 'distracted', attentionScore: 28, yaw: 22, pitch: -8, ear: 0.25, isBlinking: false, gForce: 1.0, pupilDilation: 4.8, cognitiveSaturation: 60.0 })}
-            >
-              Distracted
-            </button>
-            <button 
-              className={`sim-button ${simState.state === 'fatigued' ? 'active' : ''}`}
-              style={simState.state === 'fatigued' ? { background: 'var(--color-fatigued)', color: '#fff', borderColor: 'var(--color-fatigued)', boxShadow: '0 0 10px rgba(213,0,249,0.3)' } : {}}
-              onClick={() => updateSimValues({ state: 'fatigued', attentionScore: 12, yaw: 4, pitch: -15, ear: 0.04, isBlinking: true, gForce: 1.0, pupilDilation: 5.8, cognitiveSaturation: 85.0 })}
-            >
-              Fatigued
-            </button>
-          </div>
-        </div>
-
         {/* Sliders for fine-tuning */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div>
@@ -122,31 +88,6 @@ export default function SimulatorPanel({
               onChange={(e) => updateSimValues({ attentionScore: parseInt(e.target.value) })}
               style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
             />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                <span>Head Yaw</span>
-                <span>{simState.yaw}°</span>
-              </div>
-              <input 
-                type="range" min="-45" max="45" value={simState.yaw}
-                onChange={(e) => updateSimValues({ yaw: parseInt(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
-              />
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                <span>Head Pitch</span>
-                <span>{simState.pitch}°</span>
-              </div>
-              <input 
-                type="range" min="-30" max="30" value={simState.pitch}
-                onChange={(e) => updateSimValues({ pitch: parseInt(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
-              />
-            </div>
           </div>
 
           {/* Gaze Simulation Sliders */}
@@ -173,44 +114,6 @@ export default function SimulatorPanel({
                 style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
               />
             </div>
-          </div>
-
-          {/* New Sliders: G-Force Load, Pupil Dilation, Cognitive Saturation */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                <span>G-Force Load</span>
-                <span>{simState.gForce ? simState.gForce.toFixed(1) : '1.0'}G</span>
-              </div>
-              <input 
-                type="range" min="0.0" max="9.0" step="0.1" value={simState.gForce ?? 1.0}
-                onChange={(e) => updateSimValues({ gForce: parseFloat(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
-              />
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-                <span>Pupil Dilation</span>
-                <span>{simState.pupilDilation ? simState.pupilDilation.toFixed(1) : '3.2'}mm</span>
-              </div>
-              <input 
-                type="range" min="2.0" max="8.0" step="0.1" value={simState.pupilDilation ?? 3.2}
-                onChange={(e) => updateSimValues({ pupilDilation: parseFloat(e.target.value) })}
-                style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
-              />
-            </div>
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
-              <span>Cognitive Saturation</span>
-              <span>{simState.cognitiveSaturation ? simState.cognitiveSaturation.toFixed(1) : '12.0'}%</span>
-            </div>
-            <input 
-              type="range" min="0" max="100" step="1" value={simState.cognitiveSaturation ?? 12.0}
-              onChange={(e) => updateSimValues({ cognitiveSaturation: parseFloat(e.target.value) })}
-              style={{ width: '100%', accentColor: 'var(--hud-accent)' }}
-            />
           </div>
         </div>
       </div>
