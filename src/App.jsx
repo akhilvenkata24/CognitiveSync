@@ -3,7 +3,6 @@ import { ShieldAlert, Compass, Users, Clock, AlertTriangle, Database, Eye } from
 import WebcamTracker from './components/WebcamTracker';
 import TelemetryPanel from './components/TelemetryPanel';
 import AlertPanel from './components/AlertPanel';
-import SimulatorPanel from './components/SimulatorPanel';
 import DigitalTwinDashboard from './components/DigitalTwinDashboard';
 import InstructorControl from './components/InstructorControl';
 import AerospaceCockpit from './components/industry/AerospaceCockpit';
@@ -690,6 +689,7 @@ export default function App() {
         <DigitalTwinDashboard
           activeSessionId={activeSessionId}
           isBackendConnected={isBackendConnected}
+          onClose={() => navigateToView('cockpit')}
         />
       ) : (
         <main style={{
@@ -706,17 +706,6 @@ export default function App() {
               isSimulating={isSimulating}
               activeState={telemetry.state}
               onTrackingStateChange={(isActive) => setIsSimulating(!isActive)}
-            />
-            <SimulatorPanel 
-              isSimulating={isSimulating}
-              onToggleSimulating={() => setIsSimulating(!isSimulating)}
-              simState={simState}
-              onSimStateChange={setSimState}
-              onTriggerMockAlert={handleTriggerMockAlert}
-              onTriggerWindShear={triggerWindShear}
-              onTriggerHypoxia={triggerHypoxia}
-              onTriggerEngineFlameout={triggerEngineFlameout}
-              industry={industry}
             />
             <AlertPanel 
               alerts={alerts}

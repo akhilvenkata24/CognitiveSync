@@ -69,7 +69,7 @@ export default function SimulatorPanel({
   const currentPresets = mockAlertPresets[industry] || mockAlertPresets.aerospace;
 
   return (
-    <div className="panel-card" style={{ flex: '1 1 300px' }}>
+    <div className="panel-card" style={{ flex: '0 0 auto' }}>
       <div className="panel-title">
         <Sliders size={16} /> Industry Scenario Simulator
       </div>

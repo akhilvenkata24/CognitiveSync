@@ -5,7 +5,7 @@ import {
   Brain, BarChart3, Radio
 } from 'lucide-react';
 
-export default function DigitalTwinDashboard({ activeSessionId, isBackendConnected }) {
+export default function DigitalTwinDashboard({ activeSessionId, isBackendConnected, onClose }) {
   const [sessions, setSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState(activeSessionId || '');
   const [report, setReport] = useState(null);
@@ -452,6 +452,27 @@ export default function DigitalTwinDashboard({ activeSessionId, isBackendConnect
       {/* 1. Header Control Bar */}
       <div className="twin-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+          {onClose && (
+            <button 
+              onClick={onClose}
+              className="industry-tab"
+              style={{ 
+                marginRight: '0.4rem', 
+                border: '1px solid rgba(0, 240, 255, 0.3)', 
+                background: 'rgba(0, 240, 255, 0.05)', 
+                color: 'var(--hud-accent)',
+                padding: '0.35rem 0.7rem',
+                fontSize: '0.65rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                cursor: 'pointer',
+                flex: 'none'
+              }}
+            >
+              &larr; BACK
+            </button>
+          )}
           <Brain size={18} className="glow-icon" style={{ color: 'var(--hud-accent)' }} />
           <div>
             <h2 style={{ fontFamily: 'var(--font-hud)', fontSize: '1.05rem', margin: 0, letterSpacing: '0.05em' }}>COGNITIVE DIGITAL TWIN ARCHIVE</h2>

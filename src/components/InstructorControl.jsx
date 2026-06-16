@@ -222,6 +222,7 @@ export default function InstructorControl({
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               <button
+                type="button"
                 onClick={() => triggerScenarioLocal('wind_shear', onTriggerWindShear)}
                 style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -240,6 +241,7 @@ export default function InstructorControl({
               </button>
 
               <button
+                type="button"
                 onClick={() => triggerScenarioLocal('hypoxia', onTriggerHypoxia)}
                 style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -258,6 +260,7 @@ export default function InstructorControl({
               </button>
 
               <button
+                type="button"
                 onClick={() => triggerScenarioLocal('flameout', onTriggerEngineFlameout)}
                 style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -292,6 +295,7 @@ export default function InstructorControl({
               {presets.map((preset, idx) => (
                 <button
                   key={idx}
+                  type="button"
                   onClick={() => handleInjectPreset(preset)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255,255,255,0.06)',
@@ -360,6 +364,7 @@ export default function InstructorControl({
                 Active Warnings on Pilot Dashboard ({alerts.length}):
               </span>
               <button 
+                type="button"
                 onClick={handleClearAlertsLocal}
                 style={{ background: 'none', border: 'none', color: '#ff1744', fontSize: '0.62rem', display: 'flex', alignItems: 'center', gap: '0.2rem', cursor: 'pointer', fontFamily: 'var(--font-hud)' }}
               >
