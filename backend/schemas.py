@@ -49,6 +49,10 @@ class AttentionLogCreate(BaseModel):
     gaze_x: float
     gaze_y: float
     is_blinking: bool
+    flight_phase: Optional[str] = "Cruise"
+    transcript: Optional[str] = ""
+    airspeed: Optional[float] = None
+    altitude: Optional[float] = None
     timestamp: Optional[datetime] = None
 
 class AttentionLogResponse(AttentionLogCreate):

@@ -9,6 +9,7 @@ class UnderstandingEngine:
     # Format: { session_id: { "pfd": float, "tcas": float, ... } }
     self.mental_models: Dict[str, Dict[str, float]] = {}
     self.attention_allocation: Dict[str, Dict[str, float]] = {}
+    self.reset_flags: Dict[str, bool] = {}
 
   def _get_or_create_session_states(self, session_id: str):
     """
@@ -34,30 +35,29 @@ class UnderstandingEngine:
 
   def calculate_gaze_zone(self, detected: bool, gaze_x: float, gaze_y: float) -> str:
     """
-    Maps continuous pilot gaze coordinates to discrete cockpit visual fovea zones.
+    Maps continuous pilot gaze coordinates (-30 to 30 range) to discrete cockpit visual fovea zones.
+    - Left PFD ('pfd'): gaze_x < -4 and gaze_y < 2
+    - Left ND ('tcas'): gaze_x < -4 and gaze_y >= 2
+    - Center Engine MFD ('eicas'): -4 <= gaze_x <= 4 and gaze_y < 2
+    - Center Alerts CAS MFD ('alerts'): -4 <= gaze_x <= 4 and gaze_y >= 2
+    - Right screens / other ('secondary'): gaze_x > 4
     """
     if not detected:
       return "secondary"
 
-    # Normalize/check boundaries
-    # Zone 1: Primary Flight HUD (PFD) - Center
-    if 0.30 <= gaze_x <= 0.70 and 0.10 <= gaze_y <= 0.60:
-      return "pfd"
-      
-    # Zone 2: TCAS Radar - Bottom Left
-    if 0.00 <= gaze_x <= 0.45 and 0.60 <= gaze_y <= 1.00:
-      return "tcas"
-      
-    # Zone 3: EICAS Engine Telemetry - Bottom Right
-    if 0.45 <= gaze_x <= 0.90 and 0.60 <= gaze_y <= 1.00:
-      return "eicas"
-      
-    # Zone 4: Active Warnings List - Top Right
-    if 0.60 <= gaze_x <= 1.00 and 0.00 <= gaze_y <= 0.40:
-      return "alerts"
-
-    # Zone 5: Secondary controls / Margin
-    return "secondary"
+    # Map zones based on physical coordinates in Boeing 737 panel
+    if gaze_x < -4.0:
+      if gaze_y < 2.0:
+        return "pfd"
+      else:
+        return "tcas"
+    elif -4.0 <= gaze_x <= 4.0:
+      if gaze_y < 2.0:
+        return "eicas"
+      else:
+        return "alerts"
+    else:
+      return "secondary"
 
   def update(
     self, 
@@ -71,7 +71,11 @@ class UnderstandingEngine:
     gaze_x: float, 
     gaze_y: float,
     is_blinking: bool,
-    active_alerts: List[Dict[str, Any]]
+    active_alerts: List[Dict[str, Any]],
+    flight_phase: str = "Cruise",
+    transcript: str = "",
+    airspeed: float = None,
+    altitude: float = None
   ) -> Dict[str, Any]:
     """
     Primary update cycle. Computes frame cognitive metrics:
@@ -136,6 +140,11 @@ class UnderstandingEngine:
       "secondary": 0.0
     }
 
+    # Handle reset flag check to match actual state deviations immediately
+    if self.reset_flags.get(session_id, False):
+      self.mental_models[session_id] = {k: v for k, v in actual_state.items()}
+      self.reset_flags[session_id] = False
+
     # 3. Pilot Mental Model Update (Information Assimilation Filter)
     # Pilot assimilates information based on how long they look at the corresponding zone.
     # If they look elsewhere, their mental model decays (they are unaware of real-time state drift).
@@ -165,6 +174,27 @@ class UnderstandingEngine:
       discrepancy = abs(actual_state[param] - sess_model[param])
       understanding_gap += weights[param] * discrepancy
 
+    # Mode Confusion & Edge NLP Intent Classification
+    keywords = ["bulb", "burnt", "light", "fuse", "tap the glass", "faulty", "indicator", "breaker", "manual"]
+    crew_troubleshooting_bulb = any(kw in transcript.lower() for kw in keywords)
+    
+    # Check if altitude is dropping (pitch negative or altitude explicitly dropping in telemetry)
+    altitude_dropping = pitch < -3.0 or (altitude is not None and altitude < 30000)
+    
+    mode_confusion_active = False
+    green_dot_mismatch = False
+    
+    if crew_troubleshooting_bulb:
+      if flight_phase.lower() == "cruise":
+        if altitude_dropping:
+          mode_confusion_active = True
+        
+        if airspeed is not None and airspeed < 210.0:
+          green_dot_mismatch = True
+
+    if mode_confusion_active or green_dot_mismatch:
+      understanding_gap = 95.0 if mode_confusion_active else 100.0
+
     # 5. Calculate Situational Awareness Score SA(t)
     # Normalized SA: starts at 100%, drops as understanding gap expands
     situational_awareness = max(0.0, 100.0 - (understanding_gap * 1.5))
@@ -190,6 +220,9 @@ class UnderstandingEngine:
     amplification = 1.0 + (0.02 * (100.0 - situational_awareness))
     risk_escalation = min(100.0, base_risk * amplification)
 
+    if mode_confusion_active or green_dot_mismatch:
+      risk_escalation = max(risk_escalation, 95.0 if mode_confusion_active else 100.0)
+
     # If the operator is absent, force safety critical scores
     if not detected:
       situational_awareness = 0.0
@@ -210,6 +243,12 @@ class UnderstandingEngine:
         "secondary": round(sess_attn["secondary"] * 100, 1)
       }
     }
+
+  def reset_session(self, session_id: str):
+    """
+    Triggers an instant reset of the pilot mental model discrepancy back to nominal.
+    """
+    self.reset_flags[session_id] = True
 
 
 # Initialize global engine instance

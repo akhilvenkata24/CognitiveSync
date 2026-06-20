@@ -74,6 +74,10 @@
   padding: 0;
 }
 
+#root {
+  width: 100%;
+}
+
 body {
   background-color: var(--bg-app);
   background-image: 
@@ -108,9 +112,11 @@ body {
   height: 100vh;
   padding: 1rem;
   gap: 1rem;
+  width: 100%;
   max-width: 1920px;
   margin: 0 auto;
   position: relative;
+  box-sizing: border-box;
 }
 
 /* Premium Angled Glassmorphic Panel Cards (Avionics Deck) */

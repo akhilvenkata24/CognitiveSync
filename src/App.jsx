@@ -3,9 +3,9 @@ import { ShieldAlert, Compass, Users, Clock, AlertTriangle, Database, Eye } from
 import WebcamTracker from './components/WebcamTracker';
 import TelemetryPanel from './components/TelemetryPanel';
 import AlertPanel from './components/AlertPanel';
-import SimulatorPanel from './components/SimulatorPanel';
 import DigitalTwinDashboard from './components/DigitalTwinDashboard';
 import InstructorControl from './components/InstructorControl';
+import AerospaceCockpit from './components/industry/AerospaceCockpit';
 import { startAlarm, stopAlarm, playBeep } from './audio';
 
 // Default presets for alerts on load to showcase adaptive overlay
@@ -53,7 +53,12 @@ export default function App() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [systemTime, setSystemTime] = useState('');
   const lastPostTimeRef = useRef(0);
-  
+
+  const [flightPhase, setFlightPhase] = useState('Cruise');
+  const [activeTranscript, setActiveTranscript] = useState('');
+  const [airspeed, setAirspeed] = useState(250);
+  const [altitude, setAltitude] = useState(33000);
+
   // Real-time telemetry (merged from Camera or Simulator)
   const [telemetry, setTelemetry] = useState({
     detected: true,
@@ -202,10 +207,30 @@ export default function App() {
         ear: telemetry.ear,
         gaze_x: telemetry.gazeX,
         gaze_y: telemetry.gazeY,
-        is_blinking: telemetry.isBlinking
+        is_blinking: telemetry.isBlinking,
+        flight_phase: flightPhase,
+        transcript: activeTranscript,
+        airspeed: airspeed,
+        altitude: altitude
       })
-    }).catch(err => console.warn("Failed to stream telemetry:", err));
-  }, [telemetry, isBackendConnected, activeSessionId]);
+    })
+    .then(res => {
+      if (res.ok) return res.json();
+    })
+    .then(data => {
+      if (data && data.understanding) {
+        setTelemetry(prev => ({
+          ...prev,
+          understandingGap: data.understanding.understanding_gap,
+          endsleyL1: data.understanding.situational_awareness,
+          endsleyL2: Math.max(0, data.understanding.situational_awareness - 5),
+          endsleyL3: Math.max(0, data.understanding.situational_awareness - 8),
+          cognitiveSaturation: data.understanding.cognitive_load
+        }));
+      }
+    })
+    .catch(err => console.warn("Failed to stream telemetry:", err));
+  }, [telemetry, isBackendConnected, activeSessionId, flightPhase, activeTranscript, airspeed, altitude]);
 
   // Handle telemetry update from the camera
   const handleCameraTelemetry = (newTelemetry) => {
@@ -213,12 +238,12 @@ export default function App() {
       // Calculate dynamic cognitive stats on the fly from camera variables
       const CS = Math.min(100, Math.max(0, 100 - newTelemetry.attentionScore + (newTelemetry.isBlinking ? 20 : 0)));
       const PD = 3.0 + (CS / 100) * 4.0; // Dilate pupil as cognitive load grows
-      
+
       // Endsley Levels computation
       const l1 = Math.round(newTelemetry.attentionScore); // Perception correlates to raw attention
       const l2 = Math.round(newTelemetry.detected ? Math.max(0, newTelemetry.attentionScore * 0.95 - Math.abs(newTelemetry.yaw) * 0.5) : 0); // Comprehension drops if head yaw is high
       const l3 = Math.round(newTelemetry.detected ? Math.max(0, l2 * 0.98 - Math.abs(newTelemetry.pitch) * 0.5) : 0); // Projection drops if head pitch is high
-      
+
       setTelemetry({
         ...newTelemetry,
         gForce: 1.0, // Camera operates under 1G standard
@@ -269,22 +294,47 @@ export default function App() {
 
   const attentionLevel = getAttentionLevel(telemetry.attentionScore, telemetry.detected);
 
-  // Watch attentionLevel changes to trigger/stop auditory alarms
+  // Watch attentionLevel or Understanding Gap to trigger/stop auditory alarms
   useEffect(() => {
-    if (attentionLevel === 3) {
-      startAlarm('distracted'); // Level 3: standard repeating beep
-    } else if (attentionLevel === 4) {
+    if (attentionLevel === 4) {
       startAlarm('fatigued'); // Level 4: rapid double beep (emergency)
+    } else if (attentionLevel === 3 || (telemetry.understandingGap > 70.0 && !visorGazeLock)) {
+      startAlarm('distracted'); // Level 3 / Mode Confusion: standard repeating beep
     } else {
-      stopAlarm(); // Level 0, 1, 2: mute alarms
+      stopAlarm();
     }
     return () => stopAlarm();
-  }, [attentionLevel]);
+  }, [attentionLevel, telemetry.understandingGap, visorGazeLock]);
+
+  // Local Mock understanding gap calculator (active when backend is disconnected)
+  useEffect(() => {
+    if (isBackendConnected) return; // Backend handles it
+    
+    const keywords = ["bulb", "burnt", "light", "fuse", "tap the glass", "faulty", "indicator", "breaker", "manual"];
+    const crewTroubleshootingBulb = keywords.some(kw => activeTranscript.toLowerCase().includes(kw));
+    const altitudeDropping = simState.pitch < -3.0 || altitude < 30000;
+    
+    let localGap = 0;
+    if (crewTroubleshootingBulb) {
+      if (flightPhase.toLowerCase() === 'cruise') {
+        if (altitudeDropping) localGap = 95.0;
+        if (airspeed < 210.0) localGap = 100.0;
+      }
+    }
+    
+    setTelemetry(prev => ({
+      ...prev,
+      understandingGap: localGap,
+      endsleyL1: localGap > 0 ? Math.max(5, 100 - localGap * 1.5) : prev.endsleyL1,
+      endsleyL2: localGap > 0 ? Math.max(3, 100 - localGap * 1.6) : prev.endsleyL2,
+      endsleyL3: localGap > 0 ? Math.max(0, 100 - localGap * 1.7) : prev.endsleyL3
+    }));
+  }, [flightPhase, activeTranscript, airspeed, altitude, simState.pitch, isBackendConnected]);
 
   // Handle alert acknowledgement
   const handleAcknowledgeAlert = (alertId) => {
     playBeep(600, 0.1, 'sine', 0.15); // Confirmation sound
-    
+
     if (alertId === null) {
       // Manual reset of generic distraction overlay
       if (isSimulating) {
@@ -360,7 +410,7 @@ export default function App() {
   const updateSimValues = (updates) => {
     setSimState(prev => {
       const nextState = { ...prev, ...updates };
-      
+
       if (updates.attentionScore !== undefined) {
         const score = updates.attentionScore;
         if (score < 30) nextState.state = 'fatigued';
@@ -373,7 +423,7 @@ export default function App() {
       const baseScore = nextState.attentionScore ?? 100;
       const sat = nextState.cognitiveSaturation ?? 12;
       const satFactor = (100 - sat) / 100;
-      
+
       nextState.endsleyL1 = Math.round(Math.max(0, baseScore * (0.3 + 0.7 * satFactor)));
       nextState.endsleyL2 = Math.round(Math.max(0, nextState.endsleyL1 * 0.95 - Math.abs(nextState.yaw ?? 0) * 0.5));
       nextState.endsleyL3 = Math.round(Math.max(0, nextState.endsleyL2 * 0.90 - Math.abs(nextState.pitch ?? 0) * 0.5 - ((nextState.gForce ?? 1.0) - 1.0) * 8));
@@ -385,7 +435,7 @@ export default function App() {
   // Scenario 1: Wind Shear
   const triggerWindShear = () => {
     if (scenarioIntervalRef.current) clearInterval(scenarioIntervalRef.current);
-    
+
     handleTriggerMockAlert({
       id: `pres_windshear_${Date.now()}`,
       message: "WIND SHEAR AHEAD",
@@ -401,7 +451,7 @@ export default function App() {
       let pitchVal = 12;
       let rollVal = -15;
       let yawVal = 8;
-      
+
       if (cycle === 1) {
         pitchVal = 16;
         rollVal = 20;
@@ -578,12 +628,143 @@ export default function App() {
     };
   }, []);
 
+  const handleResetUnderstandingGap = async () => {
+    // 1. Reset local state
+    setTelemetry(prev => ({
+      ...prev,
+      understandingGap: 0,
+      endsleyL1: 95,
+      endsleyL2: 90,
+      endsleyL3: 88
+    }));
+
+    if (isSimulating) {
+      if (scenarioIntervalRef.current) {
+        clearInterval(scenarioIntervalRef.current);
+        scenarioIntervalRef.current = null;
+      }
+      
+      setSimState(prev => ({
+        ...prev,
+        scenario: 'nominal',
+        pitch: 0,
+        roll: 0,
+        yaw: 0,
+        gazeX: -1,
+        gazeY: -1,
+        attentionScore: 95,
+        cognitiveSaturation: 15
+      }));
+    }
+
+    setAlerts([]);
+
+    // Reset backend understanding
+    if (isBackendConnected && activeSessionId) {
+      try {
+        await fetch(`http://localhost:8000/api/sessions/${activeSessionId}/understanding/reset`, {
+          method: 'POST'
+        });
+      } catch (e) {
+        console.error("Failed to reset backend understanding:", e);
+      }
+    }
+  };
+
+  const triggerScenario = (scenarioName) => {
+    if (scenarioIntervalRef.current) {
+      clearInterval(scenarioIntervalRef.current);
+      scenarioIntervalRef.current = null;
+    }
+
+    if (scenarioName === 'scenario1') {
+      setFlightPhase('Cruise');
+      setAirspeed(250);
+      setAltitude(33000);
+      setActiveTranscript("Why won't the landing gear bulb turn on? Tap the glass, check the manual.");
+      
+      handleTriggerMockAlert({
+        id: `cogsync_mc_${Date.now()}`,
+        message: "ALTITUDE DEVIATION",
+        description: "Aircraft altitude descending during cruise. Auto-flight system discrepancy.",
+        priority: "critical",
+        action: "MONITOR FLIGHT PATH / RESUME CONTROLS"
+      });
+
+      let count = 0;
+      const interval = setInterval(() => {
+        count++;
+        setAltitude(prev => Math.max(12000, prev - 240));
+        setAirspeed(prev => Math.max(185, prev - 1.5));
+        
+        updateSimValues({
+          scenario: 'mode_confusion',
+          pitch: -6,
+          roll: 0,
+          yaw: 0,
+          gazeX: 0, // looking at gear panel
+          gazeY: 2,
+          attentionScore: 92,
+          cognitiveSaturation: 75
+        });
+      }, 300);
+      scenarioIntervalRef.current = interval;
+
+    } else if (scenarioName === 'scenario2') {
+      setFlightPhase('Cruise');
+      setAirspeed(250);
+      setAltitude(33000);
+      setActiveTranscript("The landing gear bulb is burnt, we can replace it later.");
+      
+      updateSimValues({
+        scenario: 'nominal',
+        pitch: 0,
+        roll: 0,
+        yaw: 0,
+        gazeX: -1,
+        gazeY: -1,
+        attentionScore: 96,
+        cognitiveSaturation: 20
+      });
+
+    } else if (scenarioName === 'scenario3') {
+      setFlightPhase('Approach');
+      setAirspeed(150);
+      setAltitude(4000);
+      setActiveTranscript("Gear down, flaps 30. Checking gear lights. The bulb is out, but continue approach.");
+      
+      let count = 0;
+      const interval = setInterval(() => {
+        count++;
+        setAltitude(prev => Math.max(1500, prev - 120));
+        updateSimValues({
+          scenario: 'nominal_descent',
+          pitch: -4,
+          roll: 0,
+          yaw: 0,
+          gazeX: 0,
+          gazeY: 2,
+          attentionScore: 94,
+          cognitiveSaturation: 45
+        });
+      }, 300);
+      scenarioIntervalRef.current = interval;
+
+    } else if (scenarioName === 'scenario4') {
+      setFlightPhase('Cruise');
+      setAirspeed(250);
+      setAltitude(33000);
+      setActiveTranscript("Engine 1 flameout, standard checklist engaged.");
+      triggerEngineFlameout();
+    }
+  };
+
   const activeStateClass = telemetry.detected ? `state-${telemetry.state}` : '';
 
   // Render Instructor Dashboard directly if requested
   if (currentView === 'control') {
     return (
-      <InstructorControl 
+      <InstructorControl
         simState={simState}
         onSimStateChange={setSimState}
         onTriggerMockAlert={handleTriggerMockAlert}
@@ -623,14 +804,14 @@ export default function App() {
 
         {/* Console View Mode Switcher */}
         <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(0,0,0,0.4)', padding: '0.2rem', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.06)', alignItems: 'center' }}>
-          <button 
+          <button
             className={`industry-tab ${currentView === 'cockpit' ? 'active' : ''}`}
             onClick={() => navigateToView('cockpit')}
             style={{ fontSize: '0.7rem', padding: '0.35rem 0.8rem' }}
           >
             Tactical HUD
           </button>
-          <button 
+          <button
             className={`industry-tab ${currentView === 'twin' ? 'active' : ''}`}
             onClick={() => navigateToView('twin')}
             style={{ fontSize: '0.7rem', padding: '0.35rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
@@ -652,8 +833,8 @@ export default function App() {
                 setVisorGazeLock(!visorGazeLock);
               }}
               className={`industry-tab ${visorGazeLock ? 'active' : ''}`}
-              style={{ 
-                fontSize: '0.65rem', 
+              style={{
+                fontSize: '0.65rem',
                 padding: '0.25rem 0.6rem',
                 borderColor: visorGazeLock ? 'var(--hud-accent)' : 'rgba(255,255,255,0.08)',
                 background: visorGazeLock ? 'rgba(0, 240, 255, 0.15)' : 'rgba(255,255,255,0.02)',
@@ -686,19 +867,21 @@ export default function App() {
 
       {/* 2. Main Content Area */}
       {currentView === 'twin' ? (
-        <DigitalTwinDashboard 
+        <DigitalTwinDashboard
           activeSessionId={activeSessionId}
           isBackendConnected={isBackendConnected}
+          onClose={() => navigateToView('cockpit')}
         />
       ) : (
         <main style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gridTemplateColumns: '340px 1fr',
           gap: '1rem',
           alignItems: 'stretch',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          width: '100%'
         }}>
-          {/* Left Hand Column (CV Video Tracker + Controls) */}
+          {/* Left Hand Column (CV Video Tracker + Controls + Visor Indicator) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}>
             <WebcamTracker 
               onTelemetryUpdate={handleCameraTelemetry} 
@@ -706,24 +889,6 @@ export default function App() {
               activeState={telemetry.state}
               onTrackingStateChange={(isActive) => setIsSimulating(!isActive)}
             />
-            <SimulatorPanel 
-              isSimulating={isSimulating}
-              onToggleSimulating={() => setIsSimulating(!isSimulating)}
-              simState={simState}
-              onSimStateChange={setSimState}
-              onTriggerMockAlert={handleTriggerMockAlert}
-              onTriggerWindShear={triggerWindShear}
-              onTriggerHypoxia={triggerHypoxia}
-              onTriggerEngineFlameout={triggerEngineFlameout}
-              industry={industry}
-            />
-          </div>
-
-          {/* Right Hand Column (Telemetry gauges + Active alerts list) */}
-          <div 
-            style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}
-            className={attentionLevel === 3 ? 'level3-bg-blur' : ''}
-          >
             <AlertPanel 
               alerts={alerts}
               operatorState={telemetry.state}
@@ -735,10 +900,27 @@ export default function App() {
               visorGazeLock={visorGazeLock}
               setVisorGazeLock={setVisorGazeLock}
             />
-            <TelemetryPanel 
+          </div>
+
+          {/* Right Hand Column (4 Cockpit Screens in a 2x2 grid) */}
+          <div 
+            style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', paddingRight: '4px' }}
+            className={attentionLevel === 3 ? 'level3-bg-blur' : ''}
+          >
+            <AerospaceCockpit 
               telemetry={telemetry}
-              industry={industry}
               attentionLevel={attentionLevel}
+              alerts={alerts}
+              flightPhase={flightPhase}
+              setFlightPhase={setFlightPhase}
+              activeTranscript={activeTranscript}
+              setActiveTranscript={setActiveTranscript}
+              airspeed={airspeed}
+              setAirspeed={setAirspeed}
+              altitude={altitude}
+              setAltitude={setAltitude}
+              triggerScenario={triggerScenario}
+              onResetUnderstandingGap={handleResetUnderstandingGap}
             />
           </div>
         </main>

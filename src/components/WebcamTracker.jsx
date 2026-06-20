@@ -12,6 +12,23 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
   const [trackingActive, setTrackingActive] = useState(false);
   const closedEyesStartRef = useRef(null);
 
+  // Sync props to refs to avoid stale closures in MediaPipe/window.Camera event listeners
+  const isSimulatingRef = useRef(isSimulating);
+  const activeStateRef = useRef(activeState);
+  const onTelemetryUpdateRef = useRef(onTelemetryUpdate);
+
+  useEffect(() => {
+    isSimulatingRef.current = isSimulating;
+  }, [isSimulating]);
+
+  useEffect(() => {
+    activeStateRef.current = activeState;
+  }, [activeState]);
+
+  useEffect(() => {
+    onTelemetryUpdateRef.current = onTelemetryUpdate;
+  }, [onTelemetryUpdate]);
+
   // Stop tracking and clean up on unmount
   useEffect(() => {
     return () => {
@@ -33,7 +50,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
       // 2. Initialize FaceMesh
       if (!faceMeshInstanceRef.current) {
         const faceMesh = new window.FaceMesh({
-          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+          locateFile: (file) => `/mediapipe/${file}`
         });
 
         faceMesh.setOptions({
@@ -55,34 +72,46 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         
-        // Wait for video metadata to load
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play();
-          
-          // 4. Start MediaPipe Camera
-          if (videoRef.current) {
-            const camera = new window.Camera(videoRef.current, {
-              onFrame: async () => {
-                if (videoRef.current && faceMeshInstanceRef.current && !isSimulating) {
-                  await faceMeshInstanceRef.current.send({ image: videoRef.current });
-                }
-              },
-              width: 640,
-              height: 480
-            });
-            camera.start();
-            cameraInstanceRef.current = camera;
-            setTrackingActive(true);
+        const handleMetadataLoaded = () => {
+          if (!videoRef.current) return;
+          videoRef.current.play().then(() => {
+            // 4. Start MediaPipe Camera
+            if (videoRef.current) {
+              const camera = new window.Camera(videoRef.current, {
+                onFrame: async () => {
+                  if (videoRef.current && faceMeshInstanceRef.current && !isSimulatingRef.current) {
+                    await faceMeshInstanceRef.current.send({ image: videoRef.current });
+                  }
+                },
+                width: 640,
+                height: 480
+              });
+              camera.start();
+              cameraInstanceRef.current = camera;
+              setTrackingActive(true);
+              // Note: We keep isModelLoading = true until the first FaceMesh frame results are processed in handleResults
+              if (onTrackingStateChange) onTrackingStateChange(true);
+            }
+          }).catch(err => {
+            console.error("Failed to play video:", err);
+            setErrorMsg("Webcam playback blocked or failed.");
             setIsModelLoading(false);
-            if (onTrackingStateChange) onTrackingStateChange(true);
-          }
+          });
         };
+
+        // If metadata is already loaded (readyState >= 1), execute immediately
+        if (videoRef.current.readyState >= 1) {
+          handleMetadataLoaded();
+        } else {
+          videoRef.current.onloadedmetadata = handleMetadataLoaded;
+        }
       }
     } catch (err) {
       console.error(err);
       setErrorMsg(err.message || "Failed to access webcam or initialize tracking.");
       setIsModelLoading(false);
       setTrackingActive(false);
+      if (onTrackingStateChange) onTrackingStateChange(false);
     }
   };
 
@@ -110,7 +139,9 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
 
   // Processing results from MediaPipe
   const handleResults = (results) => {
-    if (isSimulating || !canvasRef.current || !videoRef.current) return;
+    if (isSimulatingRef.current || !canvasRef.current || !videoRef.current) return;
+
+    setIsModelLoading(false);
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -131,7 +162,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
       ctx.fillText("Please position yourself in front of the camera", width / 2, height / 2 + 25);
       
       // Update parent with distraction score
-      onTelemetryUpdate({
+      onTelemetryUpdateRef.current({
         detected: false,
         attentionScore: 0,
         state: 'distracted',
@@ -192,24 +223,43 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     // ==========================================
     // 3. Eye Gaze Deviation
     // ==========================================
-    const irisL = landmarks[468];
-    const irisR = landmarks[473];
-
+    const hasIrisData = landmarks.length >= 478;
     const eyeLOuter = landmarks[362];
     const eyeLInner = landmarks[263];
     const eyeROuter = landmarks[33];
     const eyeRInner = landmarks[133];
 
-    const leftCenter = { x: (eyeLOuter.x + eyeLInner.x) / 2, y: (eyeLOuter.y + eyeLInner.y) / 2 };
-    const rightCenter = { x: (eyeROuter.x + eyeRInner.x) / 2, y: (eyeROuter.y + eyeRInner.y) / 2 };
+    let gazeX = 0;
+    let gazeY = 0;
+    const irisL = hasIrisData ? landmarks[468] : null;
+    const irisR = hasIrisData ? landmarks[473] : null;
 
-    const gazeXL = (irisL.x - leftCenter.x) * 450;
-    const gazeYL = (irisL.y - leftCenter.y) * 450;
-    const gazeXR = (irisR.x - rightCenter.x) * 450;
-    const gazeYR = (irisR.y - rightCenter.y) * 450;
+    if (hasIrisData && irisL && irisR && eyeLOuter && eyeLInner && eyeROuter && eyeRInner) {
+      const leftCenter = { x: (eyeLOuter.x + eyeLInner.x) / 2, y: (eyeLOuter.y + eyeLInner.y) / 2 };
+      const rightCenter = { x: (eyeROuter.x + eyeRInner.x) / 2, y: (eyeROuter.y + eyeRInner.y) / 2 };
 
-    const gazeX = (gazeXL + gazeXR) / 2;
-    const gazeY = (gazeYL + gazeYR) / 2;
+      // Self-calibrating eye-width normalization (makes tracking responsive and independent of camera distance)
+      const eyeLWidth = Math.max(0.01, Math.hypot(eyeLOuter.x - eyeLInner.x, eyeLOuter.y - eyeLInner.y));
+      const eyeRWidth = Math.max(0.01, Math.hypot(eyeROuter.x - eyeRInner.x, eyeROuter.y - eyeRInner.y));
+
+      const gazeXL = ((irisL.x - leftCenter.x) / eyeLWidth) * 75;
+      const gazeYL = ((irisL.y - leftCenter.y) / eyeLWidth) * 60;
+      const gazeXR = ((irisR.x - rightCenter.x) / eyeRWidth) * 75;
+      const gazeYR = ((irisR.y - rightCenter.y) / eyeRWidth) * 60;
+
+      gazeX = -((gazeXL + gazeXR) / 2);
+      gazeY = (gazeYL + gazeYR) / 2;
+    } else {
+      // Fallback: estimate look deviation using head yaw and pitch if iris data is unavailable
+      gazeX = -((yaw / 30) * 18);
+      gazeY = ((pitch / 25) * 12);
+    }
+
+    // Stabilize/suppress gaze updates during active blinks to prevent sudden jumps
+    if (isBlinking) {
+      gazeX = 0;
+      gazeY = 0;
+    }
 
     // ==========================================
     // 4. State Decision & Attention Score Math
@@ -247,7 +297,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
       state = 'normal';
     }
 
-    onTelemetryUpdate({
+    onTelemetryUpdateRef.current({
       detected: true,
       attentionScore: Math.round(score),
       state,
@@ -263,7 +313,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     // ==========================================
     // 5. Canvas Drawing (Futuristic Biometric Targeting Visor)
     // ==========================================
-    const primaryColor = activeState === 'distracted' ? 'var(--color-distracted)' : (activeState === 'fatigued' ? 'var(--color-fatigued)' : 'var(--color-focused)');
+    const primaryColor = activeStateRef.current === 'distracted' ? 'var(--color-distracted)' : (activeStateRef.current === 'fatigued' ? 'var(--color-fatigued)' : 'var(--color-focused)');
     ctx.strokeStyle = primaryColor;
     ctx.lineWidth = 1.5;
     ctx.shadowBlur = 0;
@@ -325,24 +375,66 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     ctx.lineTo(nx + boxSize/2, ny + boxSize/2 - bracketSize);
     ctx.stroke();
 
-    // Draw Pupil Lock Indicators
-    ctx.fillStyle = 'var(--hud-accent)';
-    ctx.shadowColor = 'var(--hud-accent)';
-    ctx.shadowBlur = 5;
-    ctx.beginPath();
-    ctx.arc(irisL.x * width, irisL.y * height, 3, 0, 2 * Math.PI);
-    ctx.arc(irisR.x * width, irisR.y * height, 3, 0, 2 * Math.PI);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    // Draw Pupil Lock Indicators & Gaze Vector Projection Line (Focal Line)
+    let centerEyeX = width / 2;
+    let centerEyeY = height / 2;
+
+    if (eyeLOuter && eyeLInner && eyeROuter && eyeRInner) {
+      centerEyeX = ((eyeLOuter.x + eyeLInner.x + eyeROuter.x + eyeRInner.x) / 4) * width;
+      centerEyeY = ((eyeLOuter.y + eyeLInner.y + eyeROuter.y + eyeRInner.y) / 4) * height;
+    }
+
+    if (isBlinking) {
+      // Draw closed eye indicators (horizontal locked red bars over eye contours)
+      ctx.strokeStyle = 'rgba(255, 23, 68, 0.85)';
+      ctx.lineWidth = 2.2;
+      
+      const approxL = { x: ((eyeLOuter.x + eyeLInner.x) / 2) * width, y: ((eyeLOuter.y + eyeLInner.y) / 2) * height };
+      const approxR = { x: ((eyeROuter.x + eyeRInner.x) / 2) * width, y: ((eyeROuter.y + eyeRInner.y) / 2) * height };
+
+      ctx.beginPath();
+      ctx.moveTo(approxL.x - 10, approxL.y);
+      ctx.lineTo(approxL.x + 10, approxL.y);
+      ctx.moveTo(approxR.x - 10, approxR.y);
+      ctx.lineTo(approxR.x + 10, approxR.y);
+      ctx.stroke();
+    } else if (hasIrisData && irisL && irisR) {
+      // Draw refined biometric iris indicators
+      ctx.fillStyle = 'var(--hud-accent)';
+      ctx.shadowColor = 'var(--hud-accent)';
+      ctx.shadowBlur = 5;
+      ctx.beginPath();
+      ctx.arc(irisL.x * width, irisL.y * height, 3, 0, 2 * Math.PI);
+      ctx.arc(irisR.x * width, irisR.y * height, 3, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Overwrite eye center with exact iris centers if available
+      centerEyeX = ((irisL.x + irisR.x) / 2) * width;
+      centerEyeY = ((irisL.y + irisR.y) / 2) * height;
+    } else if (eyeLOuter && eyeLInner && eyeROuter && eyeRInner) {
+      // Draw eye-center indicators as visual fallback when iris data is unavailable
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+      ctx.shadowColor = 'rgba(0, 240, 255, 0.5)';
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      const approxL = { x: ((eyeLOuter.x + eyeLInner.x) / 2) * width, y: ((eyeLOuter.y + eyeLInner.y) / 2) * height };
+      const approxR = { x: ((eyeROuter.x + eyeRInner.x) / 2) * width, y: ((eyeROuter.y + eyeRInner.y) / 2) * height };
+      ctx.arc(approxL.x, approxL.y, 3, 0, 2 * Math.PI);
+      ctx.arc(approxR.x, approxR.y, 3, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
 
     // Draw Gaze Vector Projection Line (Focal Line)
-    const centerEyeX = ((irisL.x + irisR.x) / 2) * width;
-    const centerEyeY = ((irisL.y + irisR.y) / 2) * height;
+    // IMPORTANT: Since the preview video & canvas are scaled horizontally with scaleX(-1) in CSS, 
+    // the visual drawing coordinates on the canvas must subtract gazeX instead of adding it,
+    // so the green vector line points in the correct direction.
     ctx.strokeStyle = '#00e676';
     ctx.lineWidth = 2.2;
     ctx.beginPath();
     ctx.moveTo(centerEyeX, centerEyeY);
-    ctx.lineTo(centerEyeX + gazeX * 5.5, centerEyeY + gazeY * 5.5);
+    ctx.lineTo(centerEyeX - gazeX * 5.5, centerEyeY + gazeY * 5.5);
     ctx.stroke();
 
     // Draw HUD Digital Overlays on target lock
@@ -351,26 +443,27 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
     ctx.textAlign = 'left';
     ctx.fillText("SYS: BIOMETRIC LOCK", nx - boxSize/2, ny - boxSize/2 - 12);
     ctx.fillText(`EAR: ${ear.toFixed(3)}`, nx - boxSize/2, ny + boxSize/2 + 15);
+    ctx.shadowBlur = 0;
     ctx.textAlign = 'right';
-    ctx.fillText(`STATE: ${activeState.toUpperCase()}`, nx + boxSize/2, ny - boxSize/2 - 12);
+    ctx.fillText(`STATE: ${activeStateRef.current.toUpperCase()}`, nx + boxSize/2, ny - boxSize/2 - 12);
     ctx.fillText(`GAZE DEV: ${gazeDev.toFixed(1)}`, nx + boxSize/2, ny + boxSize/2 + 15);
   };
 
   return (
-    <div className="panel-card" style={{ flex: '1 1 350px' }}>
+    <div className="panel-card" style={{ flex: '0 0 auto' }}>
       <div className="panel-title">
         <CameraIcon size={16} /> Operator Tracking HUD
       </div>
       
-      {/* Centered Circular HUD Scanner Wrapper */}
-      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0.5rem 0' }}>
+      {/* Organized Rectangular HUD Scanner Wrapper */}
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0.3rem 0' }}>
         <div style={{ 
           position: 'relative', 
-          width: '180px', 
-          height: '180px', 
-          borderRadius: '50%', 
+          width: '100%', 
+          height: '220px',
+          borderRadius: '6px', 
           overflow: 'hidden', 
-          border: '2px solid var(--hud-accent)', 
+          border: '1px solid var(--hud-accent)', 
           boxShadow: 'var(--hud-accent-glow)',
           background: '#010206'
         }}>
@@ -379,22 +472,23 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
             className="webcam-video" 
             muted 
             playsInline
-            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', transform: 'scaleX(-1)' }}
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', objectFit: 'cover', transform: 'scaleX(-1)' }}
           />
           <canvas 
             ref={canvasRef} 
             className="webcam-canvas" 
-            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, borderRadius: '50%', transform: 'scaleX(-1)' }}
+            style={{ display: trackingActive ? 'block' : 'none', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, transform: 'scaleX(-1)' }}
           />
 
           {!trackingActive && !errorMsg && (
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(5, 7, 15, 0.9)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center'
+              background: 'rgba(5, 7, 15, 0.9)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center',
+              zIndex: 5
             }}>
               <div style={{
-                width: '40px', height: '40px', borderRadius: '50%', background: 'var(--hud-bg-glow)',
+                width: '40px', height: '40px', borderRadius: '4px', background: 'var(--hud-bg-glow)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--hud-accent)',
                 border: '1px solid var(--hud-accent)'
               }}>
@@ -403,7 +497,7 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
               <button 
                 className="ack-button" 
                 onClick={startTracking}
-                style={{ background: 'var(--hud-accent)', color: '#000', fontSize: '0.65rem', padding: '0.3rem 0.8rem', boxShadow: 'none' }}
+                style={{ background: 'var(--hud-accent)', color: '#000', fontSize: '0.65rem', padding: '0.3rem 0.8rem', boxShadow: 'none', cursor: 'pointer' }}
               >
                 Start Stream
               </button>
@@ -412,9 +506,9 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
 
           {isModelLoading && trackingActive && (
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(5, 7, 15, 0.85)', gap: '0.5rem'
+              background: 'rgba(5, 7, 15, 0.85)', gap: '0.5rem', zIndex: 5
             }}>
               <RefreshCw size={18} className="animate-spin" style={{ color: 'var(--hud-accent)' }} />
               <span style={{ fontFamily: 'var(--font-hud)', fontSize: '0.6rem', color: 'var(--hud-accent)' }}>Calibrating...</span>
@@ -423,14 +517,15 @@ export default function WebcamTracker({ onTelemetryUpdate, isSimulating, activeS
 
           {errorMsg && (
             <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+              position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              background: 'rgba(5, 7, 15, 0.95)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center'
+              background: 'rgba(5, 7, 15, 0.95)', gap: '0.5rem', padding: '0.8rem', textAlign: 'center',
+              zIndex: 5
             }}>
               <div style={{ color: 'var(--color-distracted)' }}>
                 <AlertTriangle size={24} />
               </div>
-              <p style={{ fontSize: '0.55rem', color: 'var(--color-distracted)', lineHeight: '1.3' }}>Webcam Lock / In Use</p>
+              <p style={{ fontSize: '0.55rem', color: 'var(--color-distracted)', lineHeight: '1.3' }}>{errorMsg}</p>
               <button 
                 onClick={startTracking}
                 style={{

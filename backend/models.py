@@ -49,6 +49,10 @@ class AttentionLog(Base):
     gaze_x = Column(Float, nullable=False)
     gaze_y = Column(Float, nullable=False)
     is_blinking = Column(Boolean, nullable=False)
+    flight_phase = Column(String(30), nullable=True)
+    transcript = Column(Text, nullable=True)
+    airspeed = Column(Float, nullable=True)
+    altitude = Column(Float, nullable=True)
 
     # Relationships
     session = relationship("Session", back_populates="attention_logs")

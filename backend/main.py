@@ -153,7 +153,11 @@ def log_telemetry(session_id: str, telemetry: schemas.AttentionLogCreate, db: Se
         ear=telemetry.ear,
         gaze_x=telemetry.gaze_x,
         gaze_y=telemetry.gaze_y,
-        is_blinking=telemetry.is_blinking
+        is_blinking=telemetry.is_blinking,
+        flight_phase=telemetry.flight_phase,
+        transcript=telemetry.transcript,
+        airspeed=telemetry.airspeed,
+        altitude=telemetry.altitude
     )
     db.add(db_log)
     
@@ -184,7 +188,11 @@ def log_telemetry(session_id: str, telemetry: schemas.AttentionLogCreate, db: Se
         gaze_x=telemetry.gaze_x,
         gaze_y=telemetry.gaze_y,
         is_blinking=telemetry.is_blinking,
-        active_alerts=raw_alerts
+        active_alerts=raw_alerts,
+        flight_phase=telemetry.flight_phase,
+        transcript=telemetry.transcript,
+        airspeed=telemetry.airspeed,
+        altitude=telemetry.altitude
     )
 
     # 4. Insert Understanding metrics log row
@@ -228,6 +236,18 @@ def log_telemetry(session_id: str, telemetry: schemas.AttentionLogCreate, db: Se
         "reasoning_chain": agent_output.get("reasoning_chain", []),
         "understanding": u_metrics
     }
+
+
+@app.post("/api/sessions/{session_id}/understanding/reset")
+def reset_understanding(session_id: str, db: Session = Depends(get_db)):
+    """
+    Triggers a reset of the pilot mental model discrepancies.
+    """
+    db_session = db.query(models.Session).filter(models.Session.id == session_id).first()
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    understanding_engine.reset_session(session_id)
+    return {"status": "success"}
 
 
 # ==========================================
